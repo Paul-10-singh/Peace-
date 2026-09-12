@@ -1,0 +1,50 @@
+{
+  "name": "Peace✘",
+  "version": "1.0.0",
+  "description": "Peace✘ - Discord bot with moderation, music, server utility and security features",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "deploy": "node scripts/deploy.js",
+    "spotify": "node scripts/spotify.js"
+  },
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1112.0",
+    "@aws-sdk/s3-request-presigner": "^3.1112.0",
+    "@discord-player/extractor": "^7.2.0",
+    "@discordjs/opus": "^0.10.0",
+    "@discordjs/voice": "^0.19.2",
+    "@flytri/lyrics-finder": "^1.0.7",
+    "@napi-rs/canvas": "^1.0.7",
+    "adm-zip": "^0.6.0",
+    "better-sqlite3": "^12.11.1",
+    "canvafy": "^7.2.1",
+    "discord-player": "^7.2.0",
+    "discord.js": "^14.15.3",
+    "dotenv": "^17.4.2",
+    "emoji-mixer": "^1.3.1",
+    "ffmpeg-static": "^5.3.0",
+    "gifenc": "^1.0.3",
+    "musicard": "^3.0.1",
+    "musicard-quartz": "^1.0.0",
+    "play-dl": "^1.9.7",
+    "prism-media": "^1.3.5",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.3",
+    "yt-dlp-exec": "^1.0.2"
+  },
+  "allowScripts": {
+    "yt-dlp-exec@1.0.2": true,
+    "@discordjs/opus@0.10.0": true,
+    "protobufjs@7.6.5": true,
+    "better-sqlite3@12.11.1": true,
+    "ffmpeg-static@5.3.0": true,
+    "canvas@3.2.3": true,
+    "esbuild@0.27.7": true
+  }
+}

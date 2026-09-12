@@ -1,0 +1,10 @@
+{
+  "youtube": "VISITOR_INFO1_LIVE=...; __Secure-3PSID=...; __Secure-3PAPISID=...; SID=...; SAPISID=...; HSID=...; SSID=...; APISID=...; LOGIN_INFO=...",
+  "spotify": {
+    "client_id": "325940d49c134128864c699f72305913",
+    "client_secret": "80320c1e24e1497a96a861d6126f2d21",
+    "redirect_url": "http://localhost:3000/callback",
+    "authorization_code": ""
+  },
+  "soundcloud": ""
+}
