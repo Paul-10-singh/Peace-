@@ -15,10 +15,9 @@
  */
 const { EventEmitter } = require('events');
 const path = require('path');
-const { spawn } = require('child_process');
 const playdl = require('play-dl');
 const prism = require('prism-media');
-const ffmpegStatic = require('ffmpeg-static');
+const ytDlp = require('yt-dlp-exec');
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -446,21 +445,19 @@ class MusicManager extends EventEmitter {
    * it accepts the same cookies.txt we build from cookies.json.
    */
   spawnYtdlp(url, opts = {}) {
-    const { bin, args } = this.ytdlpCommand(url, opts);
-    const child = spawn(bin, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = ytDlp.exec(url, this.ytdlpFlags(opts), { windowsHide: true });
     child.stderr.on('data', () => {}); // consume so the child never blocks
     child.on('error', () => {});       // surfaced via the stream per-track
     return { stream: child.stdout };
   }
 
-  /** Build the yt-dlp invocation (python -m yt_dlp is preferred: works off-PATH). */
-  ytdlpCommand(url, opts = {}) {
-    const args = ['-m', 'yt_dlp', '--no-warnings', '--no-progress', '--quiet', '-f', 'ba', '-o', '-'];
+  /** Build yt-dlp flags for the bundled executable shipped by yt-dlp-exec. */
+  ytdlpFlags(opts = {}) {
+    const flags = { noWarnings: true, noProgress: true, quiet: true, format: 'ba', output: '-' };
     const cookiesFile = path.join(path.resolve(__dirname, '..', '..'), 'cookies.txt');
-    if (require('fs').existsSync(cookiesFile)) args.push('--cookies', cookiesFile);
-    if (opts.seekSeconds) args.push('--download-sections', `*${opts.seekSeconds}-`);
-    args.push(url);
-    return { bin: 'python', args };
+    if (require('fs').existsSync(cookiesFile)) flags.cookies = cookiesFile;
+    if (opts.seekSeconds) flags.downloadSections = `*${opts.seekSeconds}-`;
+    return flags;
   }
 
   /**
@@ -469,32 +466,11 @@ class MusicManager extends EventEmitter {
    * Returns track shapes: { url, title, author, durationMS, duration, thumbnail, source }.
    */
   async ytdlpSearch(query, limit = 5) {
-    const args = ['-m', 'yt_dlp', '--no-warnings', '--no-progress', '--quiet', '--flat-playlist', '-J', `ytsearch${Math.max(1, limit)}:${String(query || '').trim()}`];
+    const searchQuery = `ytsearch${Math.max(1, limit)}:${String(query || '').trim()}`;
+    const flags = { noWarnings: true, noProgress: true, quiet: true, flatPlaylist: true, dumpSingleJson: true };
     const cookiesFile = path.join(path.resolve(__dirname, '..', '..'), 'cookies.txt');
-    if (require('fs').existsSync(cookiesFile)) args.splice(args.length - 1, 0, '--cookies', cookiesFile);
-    const tracks = await new Promise((resolve) => {
-      const child = spawn('python', args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-      let out = '', err = '';
-      let settled = false;
-      const finish = (value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        resolve(value);
-      };
-      const timeout = setTimeout(() => {
-        child.kill();
-        finish([]);
-      }, 20000);
-      timeout.unref();
-      child.stdout.on('data', (d) => { out += d; });
-      child.stderr.on('data', (d) => { err += d; });
-      child.on('error', () => finish([]));
-      child.on('close', (code) => {
-        if (code !== 0) return finish([]);
-        try {
-          const data = JSON.parse(out);
-          finish((data?.entries || []).map((e) => {
+    if (require('fs').existsSync(cookiesFile)) flags.cookies = cookiesFile;
+    const tracks = await ytDlp(searchQuery, flags, { timeout: 20000 }).then((data) => (data?.entries || []).map((e) => {
             const id = e?.id;
             return {
               url: id ? `https://www.youtube.com/watch?v=${id}` : (e?.url || null),
@@ -505,12 +481,7 @@ class MusicManager extends EventEmitter {
               thumbnail: e?.thumbnails?.[e.thumbnails.length - 1]?.url || null,
               source: 'youtube',
             };
-          }).filter((t) => t.url));
-        } catch {
-          finish([]);
-        }
-      });
-    }).catch(() => []);
+          }).filter((t) => t.url)).catch(() => []);
     return tracks;
   }
 
