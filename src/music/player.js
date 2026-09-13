@@ -309,10 +309,13 @@ class MusicManager extends EventEmitter {
     const sess = this.sessions.get(guildId);
     if (!sess) return;
     sess.current = track;
-    this.playCurrent(guildId).catch((err) => {
+    try {
+      await this.playCurrent(guildId);
+    } catch (err) {
       this.log(guildId, `Playback error: ${err.message}`);
       this.autoNext(guildId);
-    });
+      throw err;
+    }
     this.emit('playerStart', this.getQueue(guildId));
     const { refreshPanel } = require('./nowPlaying');
     refreshPanel(this.client, guildId).catch(() => {});
@@ -446,8 +449,16 @@ class MusicManager extends EventEmitter {
    */
   spawnYtdlp(url, opts = {}) {
     const child = ytDlp.exec(url, this.ytdlpFlags(opts), { windowsHide: true });
-    child.stderr.on('data', () => {}); // consume so the child never blocks
-    child.on('error', () => {});       // surfaced via the stream per-track
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-1000);
+    });
+    child.on('error', (err) => child.stdout.destroy(err));
+    child.on('close', (code) => {
+      if (code !== 0 && !child.stdout.destroyed) {
+        child.stdout.destroy(new Error(stderr.trim() || `yt-dlp exited with code ${code}`));
+      }
+    });
     return { stream: child.stdout };
   }
 
