@@ -27,6 +27,7 @@
   "allowScripts": {
     "protobufjs@7.6.5": true,
     "canvas@3.2.3": true,
-    "esbuild@0.27.7": true
+    "esbuild@0.27.7": true,
+    "better-sqlite3@13.0.3": true
   }
 }
