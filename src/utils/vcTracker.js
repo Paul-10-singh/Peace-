@@ -119,8 +119,48 @@ try {
   console.warn(`[PeaceX] [vcTracker] SQLite binding unavailable (${err.message}) — using JSON fallback.`);
 }
 
+// ── One-time migration: fold the JSON fallback store into SQLite ─────────
+// If the bot previously ran without better-sqlite3 it recorded time into
+// data/vc_tracker.json. On first boot with SQLite available we merge those
+// rows into vc_time (never overwriting existing data) and archive the JSON.
+function migrateJsonFallbackIntoDb() {
+  if (!db || !fs.existsSync(FB_FILE)) return;
+  const archive = `${FB_FILE}.migrated`;
+  try {
+    const raw = JSON.parse(fs.readFileSync(FB_FILE, 'utf8'));
+    const merged = db.prepare(
+      'SELECT 1 FROM vc_time WHERE user_id = ? AND guild_id = ? AND date = ?'
+    );
+    let moved = 0;
+    const tx = db.transaction(() => {
+      for (const [key, dates] of Object.entries(raw)) {
+        const sep = key.indexOf(':');
+        if (sep === -1) continue;
+        const guildId = key.slice(0, sep);
+        const userId = key.slice(sep + 1);
+        if (!guildId || !userId) continue;
+        for (const [date, seconds] of Object.entries(dates || {})) {
+          if (!(seconds > 0)) continue;
+          if (merged.get(String(userId), String(guildId), date)) continue;
+          insertStmt.run({ user_id: String(userId), guild_id: String(guildId), date, seconds });
+          moved++;
+        }
+      }
+    });
+    tx();
+    fs.renameSync(FB_FILE, archive);
+    console.log(`[PeaceX] [vcTracker] Migrated ${moved} JSON record(s) into SQLite (backup: ${path.basename(archive)}).`);
+  } catch (err) {
+    console.warn(`[PeaceX] [vcTracker] JSON→SQLite migration skipped: ${err.message}`);
+  }
+}
+
 // ── JSON fallback store: { "guildId:userId": { "YYYY-MM-DD": seconds } } ─
 const FB_FILE = path.join(DATA_DIR, 'vc_tracker.json');
+
+// Run after FB_FILE is defined (only migrates when SQLite is available).
+migrateJsonFallbackIntoDb();
+
 let fbCache = null;
 function fbStore() {
   if (fbCache) return fbCache;
@@ -418,6 +458,33 @@ async function fetchPresenceStatus(client, guildId, userId) {
   }
 }
 
+/**
+ * Verify the GUILD_PRESENCES privileged intent actually works. Enabling it
+ * in code is not enough — it must also be approved in the Discord Developer
+ * Portal. If approval is missing, Discord returns NO presence data at all and
+ * the VC stats would silently show everyone as "Invisible". Detected here so
+ * the owner sees a clear console warning at boot instead of wrong data.
+ */
+async function verifyPresenceIntent(client) {
+  try {
+    const guild = client.guilds.cache.find((g) => g.memberCount > 1);
+    if (!guild) return;
+    const probe = await guild.members.fetch({ limit: 5, withPresences: true }).catch(() => null);
+    const hasData = probe?.some((m) => m.presence?.status && m.presence.status !== 'offline');
+    if (hasData) {
+      console.log('[PeaceX] [vcTracker] ✓ Presence intent OK — accurate Discord status will be shown.');
+    } else {
+      console.warn(
+        '[PeaceX] [vcTracker] ✘ Presence data returned empty. The GUILD_PRESENCES intent is ENABLED in code ' +
+          'but NOT APPROVED on the Discord Developer Portal (https://discord.com/developers/applications -> ' +
+          'your app -> Bot). VC stats presence may show everyone as Invisible until you approve it.'
+      );
+    }
+  } catch {
+    /* verification is best-effort */
+  }
+}
+
 // ── Automated Sunday report (11 PM, DMs every guild owner) ──────────────
 function startWeeklyReportScheduler(client) {
   const tick = async () => {
@@ -457,6 +524,7 @@ module.exports = {
   handleVoiceStateUpdate,
   seedActiveSessions,
   startLiveSync,
+  verifyPresenceIntent,
   fetchPresenceStatus,
   getLiveSeconds,
   formatHMS,

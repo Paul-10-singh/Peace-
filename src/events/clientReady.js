@@ -52,6 +52,7 @@ module.exports = {
     try {
       vcTracker.seedActiveSessions(client);
       vcTracker.startLiveSync(client);
+      vcTracker.verifyPresenceIntent(client);
       vcTracker.startWeeklyReportScheduler(client);
     } catch (err) {
       console.error(`[PeaceX] [vcTracker] Failed to start: ${err.message}`);
