@@ -5,7 +5,7 @@
  * /vcstats_custom - calculate VC time for a custom date period (YYYY-MM-DD).
  */
 const { SlashCommandBuilder } = require('discord.js');
-const { reply, presenceStatus } = require('../../utils/helpers');
+const { reply } = require('../../utils/helpers');
 const { categoryEmbed } = require('../../utils/decorations');
 const { E } = require('../../utils/vcTracker');
 const vcTracker = require('../../utils/vcTracker');
@@ -70,6 +70,8 @@ module.exports = {
       breakdown = '*No voice activity recorded in this period.*';
     }
 
+    const presence = await vcTracker.fetchPresenceStatus(interaction.client, guildId, target.id);
+
     const embed = categoryEmbed('utility', {
       title: `Custom VC Stats: ${target.displayName || target.username}`,
       description: `**Custom Period:** \`${startDate}\` to \`${endDate}\``,
@@ -77,7 +79,7 @@ module.exports = {
         { name: 'Total Calculated Time', value: `\`${vcTracker.formatHMS(totalHours * 3600)}\``, inline: true },
         { name: 'Target Goal', value: `\`${vcTracker.WEEKLY_GOAL_HOURS} hrs\``, inline: true },
         { name: 'Hours Needed to Complete', value: remainingText(totalHours), inline: false },
-        { name: `${E.status} Period Status`, value: `${statusStr}\n• Discord: ${presenceStatus(member)}`, inline: false },
+        { name: `${E.status} Period Status`, value: `${statusStr}\n• Discord: ${presence}`, inline: false },
         { name: 'Daily Recorded Breakdown', value: breakdown, inline: false },
       ],
     });

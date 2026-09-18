@@ -47,9 +47,11 @@ module.exports = {
     setInterval(rotate, 10_000);
 
     // VC activity tracking: seed members already in voice, then schedule the
-    // weekly Sunday 11 PM owner report.
+    // weekly Sunday 11 PM owner report and keep sessions synced with the live
+    // Discord client (accurate data even across restarts / missed events).
     try {
       vcTracker.seedActiveSessions(client);
+      vcTracker.startLiveSync(client);
       vcTracker.startWeeklyReportScheduler(client);
     } catch (err) {
       console.error(`[PeaceX] [vcTracker] Failed to start: ${err.message}`);

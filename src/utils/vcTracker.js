@@ -22,6 +22,15 @@ const fs = require('fs');
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+// Live sessions are persisted to disk so no time is lost across a bot restart,
+// and periodically reconciled against the live Discord client so missed
+// events (gateway hiccup, restart, dropped voiceStateUpdate) get corrected.
+const SESSION_FILE = path.join(DATA_DIR, 'vc_sessions.json');
+const LIVE_SYNC_MS = (() => {
+  const n = parseFloat(process.env.VC_SYNC_INTERVAL_SECONDS);
+  return Number.isFinite(n) && n > 0 ? n * 1000 : 60_000;
+})();
+
 // Weekly goal (hours) required for a member to count as "active".
 const WEEKLY_GOAL_HOURS = (() => {
   const n = parseFloat(process.env.VC_WEEKLY_GOAL_HOURS);
@@ -131,10 +140,34 @@ function fbPersist() {
 }
 
 // ── Active sessions: Map<`${guildId}:${userId}`, joinMs> ────────────────
+// Backed by data/vc_sessions.json so a restart never drops a live session.
 const activeSessions = new Map();
 
 function sessionKey(guildId, userId) {
   return `${guildId}:${userId}`;
+}
+
+function persistSessions() {
+  try {
+    const payload = {};
+    for (const [key, joinMs] of activeSessions) payload[key] = joinMs;
+    fs.writeFileSync(SESSION_FILE, JSON.stringify(payload), 'utf8');
+  } catch (err) {
+    console.warn(`[PeaceX] [vcTracker] Failed to persist live sessions: ${err.message}`);
+  }
+}
+
+function loadSessions() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+    for (const [key, joinMs] of Object.entries(raw)) {
+      if (typeof joinMs === 'number' && Number.isFinite(joinMs) && joinMs > 0) {
+        activeSessions.set(key, joinMs);
+      }
+    }
+  } catch {
+    /* no saved sessions yet */
+  }
 }
 
 function addTime(userId, guildId, seconds) {
@@ -166,6 +199,7 @@ function handleVoiceStateUpdate(oldState, newState) {
 
   if (!before && after) {
     activeSessions.set(key, now);
+    persistSessions();
     return;
   }
 
@@ -173,6 +207,7 @@ function handleVoiceStateUpdate(oldState, newState) {
     const joined = activeSessions.get(key);
     if (joined != null) {
       activeSessions.delete(key);
+      persistSessions();
       addTime(member.id, guildId, (now - joined) / 1000);
     }
     return;
@@ -185,19 +220,69 @@ function handleVoiceStateUpdate(oldState, newState) {
       addTime(member.id, guildId, (now - joined) / 1000);
     }
     activeSessions.set(key, now);
+    persistSessions();
   }
 }
 
 /** Seed members already in voice at boot so restarts don't drop the session. */
 function seedActiveSessions(client) {
+  loadSessions();
   const now = Date.now();
   for (const guild of client.guilds.cache.values()) {
     for (const state of guild.voiceStates.cache.values()) {
       const member = state.member;
       if (!state.channelId || !member || member.user?.bot) continue;
-      activeSessions.set(sessionKey(guild.id, member.id), now);
+      const key = sessionKey(guild.id, member.id);
+      if (!activeSessions.has(key)) activeSessions.set(key, now);
     }
   }
+  persistSessions();
+}
+
+/**
+ * Reconcile live sessions against the actual Discord client. Runs on an
+ * interval to correct anything the gateway whispered about:
+ *  - member in voice but not tracked (missed join / restart) -> start now
+ *  - member tracked but no longer in voice (missed leave)      -> commit
+ */
+function reconcileSessions(client) {
+  const now = Date.now();
+  const seen = new Set();
+
+  for (const guild of client.guilds.cache.values()) {
+    for (const state of guild.voiceStates.cache.values()) {
+      const member = state.member;
+      if (!state.channelId || !member || member.user?.bot) continue;
+      const key = sessionKey(guild.id, member.id);
+      seen.add(key);
+      if (!activeSessions.has(key)) activeSessions.set(key, now);
+    }
+  }
+
+  let changed = false;
+  for (const [key, joined] of activeSessions) {
+    if (seen.has(key)) continue;
+    const colon = key.indexOf(':');
+    const guildId = key.slice(0, colon);
+    const userId = key.slice(colon + 1);
+    activeSessions.delete(key);
+    changed = true;
+    addTime(userId, guildId, (now - joined) / 1000);
+  }
+
+  if (changed || process.hrtime()[0] % 60 === 0) persistSessions();
+}
+
+/** Keep sessions synced with the live Discord client every LIVE_SYNC_MS. */
+function startLiveSync(client) {
+  const tick = () => {
+    try {
+      reconcileSessions(client);
+    } catch (err) {
+      console.warn(`[PeaceX] [vcTracker] Live sync failed: ${err.message}`);
+    }
+  };
+  setInterval(tick, LIVE_SYNC_MS);
 }
 
 /** Seconds of the in-progress session for a member, if any. */
@@ -308,6 +393,31 @@ function splitMessage(text, limit = 1900) {
   return chunks;
 }
 
+// ── Discord presence (accurate, client-fetched) ─────────────────────────
+// The client caches presences lazily; asking it directly gives the real
+// Online / Idle / DND / Offline state even if the member was never in cache.
+function presenceLabel(status) {
+  const map = {
+    online: { dot: '🟢', label: 'Online' },
+    idle: { dot: '🟡', label: 'Idle' },
+    dnd: { dot: '🔴', label: 'Do Not Disturb' },
+    offline: { dot: '⚫', label: 'Invisible' },
+  };
+  const entry = map[status] || map.offline;
+  return `${entry.dot} ${entry.label}`;
+}
+
+async function fetchPresenceStatus(client, guildId, userId) {
+  try {
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return presenceLabel('offline');
+    const member = await guild.members.fetch({ user: userId, withPresences: true }).catch(() => null);
+    return presenceLabel(member?.presence?.status || 'offline');
+  } catch {
+    return presenceLabel('offline');
+  }
+}
+
 // ── Automated Sunday report (11 PM, DMs every guild owner) ──────────────
 function startWeeklyReportScheduler(client) {
   const tick = async () => {
@@ -346,6 +456,8 @@ module.exports = {
   getWeekRange,
   handleVoiceStateUpdate,
   seedActiveSessions,
+  startLiveSync,
+  fetchPresenceStatus,
   getLiveSeconds,
   formatHMS,
   getUserStats,
