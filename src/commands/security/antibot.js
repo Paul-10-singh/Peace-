@@ -7,10 +7,10 @@ const { openPanel } = require('../../utils/securityPanel');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('antinuke')
-    .setDescription('Open the anti-nuke panel (instant-action protection)')
+    .setName('antibot')
+    .setDescription('Open the anti-bot panel (auto-kick unauthorized bots)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   async execute(interaction) {
-    return openPanel(interaction, 'antiNuke');
+    return openPanel(interaction, 'antiBot');
   },
 };

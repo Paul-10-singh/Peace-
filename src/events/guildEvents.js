@@ -46,7 +46,6 @@ module.exports = {
           `<:ticknew:1536133967709741086> **${client.user.username}** has been successfully added to **${guild.name}**.\n\n` +
           `> 📌 Use \`/help\` to explore all commands.\n` +
           `> ⚙️ Use \`/security\` to set up auto-moderation.\n` +
-          `> 🎵 Use \`/play\` to start playing music.\n` +
           `> 🔧 Use \`/setlog\` to configure logging channels.`
         )
         .addFields(

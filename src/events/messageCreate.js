@@ -5,8 +5,6 @@
 const { get } = require('../utils/settings');
 const { checkMessage, punish } = require('../utils/security');
 const { getAfk, isAfk, clearAfk } = require('../utils/afk');
-const { tryReact } = require('../utils/autoreact');
-const { tryRespond } = require('../utils/autoresponder');
 const { tryRunMessageCommand } = require('../utils/messageCmd');
 
 const spamBuckets = new Map(); // guildId -> Map(userId -> timestamps[])
@@ -106,18 +104,11 @@ module.exports = {
       const ended = clearAfk(message.author.id);
       if (ended) {
         await message.channel
-          .send({ content: `👋 **${message.author.username}**, you sent a message so your AFK has ended.` })
+          .send({ content: `<a:butterfly:1550512700327600342> **${message.author.username}**, you sent a message so your AFK has ended.` })
           .catch(() => {});
       }
     }
 
-    // --- Auto-reactions + auto-responder (independent of the security module) ---
-    try {
-      await tryReact(message);
-      await tryRespond(client, message);
-    } catch (err) {
-      console.error('[PeaceX] [AutoReact/AutoResponder] Error:', err);
-    }
 
     const config = get(message.guild.id, 'security');
     if (!config.enabled) return;

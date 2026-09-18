@@ -1,6 +1,9 @@
 # Peace✘ Bot 🤖
 
-A Discord bot with **moderation**, **server utility**, **music**, and **security/anti-nuke** features, built with **discord.js v14**.
+A Discord bot with **moderation**, **server utility**, **security/anti-nuke**, and **owner tooling**, built with **discord.js v14**.
+
+> 🎵 **Music moved out.** All music commands now live in the separate **Peace music** bot
+> (folder `Peace music`, its own token/application). This bot is security + regular use only.
 
 ## Features
 
@@ -11,18 +14,7 @@ A Discord bot with **moderation**, **server utility**, **music**, and **security
 `/kick`, `/ban`, `/timeout`, `/untimeout`, `/purge`, `/warn`, `/warnings`, `/unwarn`
 
 ### 🛠️ Utility
-`/avatar`, `/serverinfo`, `/userinfo`, `/roles`, `/role give|remove|list`, `/giverole`, `/roleicon`, `/nickname`, `/namechange`, `/welcome`, `/goodbye`, `/lock`, `/unlock`, `/say`, `/poll`, `/remind`, `/ping`, `/stats`, `/help`, `/support`
-
-### 🎵 Music
-`/play`, `/skip`, `/stop`, `/queue`, `/volume`, `/loop`, `/leave`
-
-`/play` accepts a **song name**, a **YouTube video/playlist link**, or a **Spotify link** (single track, album, or playlist — Spotify audio is played via its YouTube match). Audio streams are produced by **yt-dlp** (bundled), so playback keeps working even when YouTube changes its player.
-
-**Spotify setup (optional, one-time):**
-1. Create a free app at https://developer.spotify.com/dashboard → copy Client ID + Secret.
-2. In the app settings add Redirect URI: `http://localhost:3000`.
-3. Run `npm run spotify` and follow the prompts (this links your account, saving `.data/spotify.data`).
-4. Restart the bot. `/play https://open.spotify.com/track/...` now works.
+`/avatar`, `/serverinfo`, `/userinfo`, `/roles`, `/role give|remove|list`, `/giverole`, `/roleicon`, `/nickname`, `/welcome`, `/goodbye`, `/lock`, `/unlock`, `/say`, `/poll`, `/remind`, `/ping`, `/stats`, `/help`, `/support`
 
 ### 🔐 Security
 | Command | What it does |
@@ -51,13 +43,16 @@ All security features are **automatic**:
 ### 📣 /say
 `/say message:"hello"` — your command message is automatically deleted and the bot posts the text instead.
 
+## Music ➜ separate bot
+
+All `/play`, `/skip`, `/stop`, `/queue`, `/volume`, `/loop`, `/radio`, playlists, filters, and the now-playing card
+now run in the **Peace music** bot (`D:\DISCORD BOT\Peace music`). See that folder's README for its own setup —
+audio is streamed with **yt-dlp**, so it needs **ffmpeg** on `PATH` and the **Voice States** intent.
+
 ## Requirements
 
 - **Node.js 18+** (https://nodejs.org)
-- **ffmpeg** on your `PATH` (required for music playback).
-  - Windows: `winget install Gyan.FFmpeg` or https://ffmpeg.org/download.html
-  - Linux/macOS: `sudo apt install ffmpeg` / `brew install ffmpeg`
-- **yt-dlp** — audio is streamed with yt-dlp for reliable YouTube playback. The binary is bundled automatically via `yt-dlp-exec` during `npm install` (if the postinstall is blocked, run `npm rebuild yt-dlp-exec`).
+- No **ffmpeg** needed for this bot anymore (music lives in the Peace music bot).
 
 ## Setup
 
@@ -83,7 +78,12 @@ All security features are **automatic**:
    npm install
    npm start
    ```
-   Slash commands are registered automatically on startup.
+5. **Register (or update) slash commands:**
+   ```bash
+   npm run deploy
+   ```
+   Command registration happens in exactly one place — `scripts/deploy.js` (global scope, single occurrence per server).
+   Run it again after adding/changing commands. Verified against Discord's 100-command global cap.
 
 ## Quick start for security
 
@@ -103,11 +103,10 @@ src/
 ├── index.js              # Bot entry point, client setup, command/event loader
 ├── commands/
 │   ├── moderation/       # kick, ban, timeout, purge, warn, warnings, unwarn
-│   ├── utility/          # avatar, poll, reminder, say, stats, role, welcome, goodbye...
-│   ├── music/            # play, skip, stop, queue, volume, loop, leave
-│   └── security/         # security, whitelist, words, antispam, antilink, antinuke
+│   ├── owner/            # owner mgmt, moderation, voice/channel, roles, extras
+│   ├── security/         # security, whitelist, words, antispam, antilink, antinuke
+│   └── utility/          # avatar, poll, reminder, say, stats, role, welcome, goodbye...
 ├── events/               # interactionCreate, guildMemberAdd/Remove, messageCreate, antiNuke
-├── music/manager.js      # Voice queue & playback manager (play-dl)
 └── utils/                # helpers, settings store, security checks, stats counters
 ```
 

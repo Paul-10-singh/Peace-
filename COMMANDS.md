@@ -19,9 +19,9 @@ All commands are slash (`/`) commands.
 
 # 🟢 Everyone
 
-`General`   :  /botinfo /avatar /serverinfo /userinfo /roles /poll /remind /ping /support /help /wallpaper
-`Music`     :  /play /search /playlist play/create/list/add/delete/load/show /loop /filter /lyrics /grab /clear /remove /skipto /forceskip /24-7
-`Personal`  :  /todo add/edit/complete/list/remove /note add/edit/list/remove /afk
+`General`   :  /avatar /serverinfo /userinfo /roles /poll /remind /ping /support /help
+`Personal`  :  /note add/edit/list/remove /afk
+`Voice`     :  /stop /disconnect (warn if 24/7 mode is on)
 
 # 🟡 Admin (owner/co-owner or whitelisted)
 
@@ -33,20 +33,16 @@ All commands are slash (`/`) commands.
 `Owner mgmt`    : /extraowner list/add/remove/temp /trusted list/add/remove (current server) /setprofile /dm /mention
 `Moderation`    : /kick /ban /unban /purge /purge_user /purge_all_server_user /unwarn /nuke /idban /removeroll /removerollall /quarantine jail/release/bypass*
 `Channel`       : /vc kick/kickall/mute/muteall/unmute/unmuteall/deafen/undeafen/list/moveall/lock/unlock/hide/show /channel hide/show/nsfw/slowmode
+`24/7 voice`    : /247 on/end/status [channel] /vc247 set/off/status — bot stays in a VC around the clock & auto-rejoins on kick/move/disconnect
 `Tickets`       : /ticket setup/setlog/panel/close
-`Music`         : /24-7 (owner-only library tracks: /p1 /p2 /p3)
 `Roles/emoji`   : /giverole /roleicon /stealemoji /rolemanage info/all/strip/inrole
-`AI & search`   : /pinterest banner/pfp/search/pin /youtube search
-`Server config` : /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /namechange /stats setup/disable/status 
+`Server config` : /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /stats setup/disable/status 
 /setlog /embed /announce /backup /leaveserver /serverlist
 `Extras`        : /snipe /purgebots /picture user/server/icon
 `Security`      : /safety on/off/status /security on/off/action/threshold /whitelist add/remove /antilink * /antinuke on/off /scamdetect on/off /lockdown /ignore add/remove
 
 Context menu (Owner): right-click a message → `Translate Message` (Google translate, no key)
 
-# 🟠 Trusted (owner or /trusted member)
-
-/autoreact add/remove/list /autoresponder add/remove/list
 
 
 
@@ -59,7 +55,6 @@ Context menu (Owner): right-click a message → `Translate Message` (Google tran
 /extraowner add user:<user>	Grant owner powers in this server (main owner only)
 /extraowner remove user:<user>	Revoke owner powers in this server (main owner only)
 /extraowner temp user:<user> minutes:<n>	Grant temporary owner powers in this server (main owner only)
-/botinfo	Bot stats: name, ID, version, uptime, ping, servers, users
 /setprofile [username] [avatar]	Change bot's username/avatar
 /dm user:<user> message:<text>	DM a server member
 /autorole add role:<role>	Auto-assign a role to every new member (removes with /autorole remove)
@@ -89,6 +84,10 @@ Context menu (Owner): right-click a message → `Translate Message` (Google tran
 /vc moveall target:<vc> [channel]	Move everyone from one VC to another
 /vc lock / unlock [channel]	Block / allow @everyone joining a VC
 /vc hide / show [channel]	Hide / show a VC from @everyone
+/vc247 set channel:<vc>	Bot stays in that VC 24/7 (auto-rejoins on kick/move/disconnect)
+/vc247 off	Disable 24/7 and leave voice
+/vc247 status	Show the 24/7 setup
+/247 mode:<on|end|status> [channel]	Short 24/7 toggle: on = bot joins & stays, end = free the bot, status = current setup
 /channel hide / show [channel]	Hide / show any channel from @everyone
 /channel nsfw enabled:<bool> [channel]	Toggle NSFW on a text channel
 /channel slowmode seconds:<0-21600> [channel]	Set channel slowmode
@@ -118,20 +117,6 @@ Context menu (Owner): right-click a message → `Translate Message` (Google tran
 
 Owners stored in data/owners.json. Extra owners (via /extraowner add) get full Tier 2 + Tier 3 access in the current server only. Only the main owner edits the owner list.
 
-# 🤝 Trusted members
-
-Command	Description
-/trusted add user:<user>	Grant restricted-command access (owners only)
-/trusted remove user:<user>	Revoke restricted-command access (owners only)
-/trusted list	Show whitelisted user IDs (owners only, auditability)
-/autoreact add channel:<channel> emoji:<emoji>	Auto-react to every message in a channel
-/autoreact remove channel:<channel> emoji:<emoji>	Remove a channel reaction
-/autoreact list	Show all auto-reaction rules
-/autoresponder add trigger:<text> response:<text>	Auto-reply when a message contains the trigger
-/autoresponder remove trigger:<text>	Remove an auto-reply rule
-/autoresponder list	Show all auto-reply rules
-
-Trusted list stored in data/whitelist.json (survives restarts). If the file is missing or corrupt the bot fails closed — access denied for everyone until fixed.
 
 # 🛡️ Moderation
 
@@ -160,7 +145,6 @@ One open ticket per user per category. @everyone denied; creator + staff role al
 
 # 🛠️ Utility
 
-/help	Interactive help / full command list
 /ping	Latency + uptime
 /avatar [user]	Show avatar
 /serverinfo / /userinfo [user]	Server / user stats
@@ -168,47 +152,26 @@ One open ticket per user per category. @everyone denied; creator + staff role al
 /role list [user]	List a member's roles
 /giverole user:<user> role:<role> [action]	Add/remove role (alt syntax)
 /roleicon role:<role> [icon] [clear]	Set/clear role icon
-/nickname / /namechange nickname:<name> [user]	Change nickname
+/nickname nickname:<name> [user]	Change nickname
 /say message:<text> [channel]	Bot posts your message (admin; message deleted)
 /poll question:<text> option1..9	Emoji-reaction poll
 /remind time:<duration> what:<text>	DM reminder
-/todo add/edit/complete/list/remove	Personal task list
 /note add/edit/list/remove	Personal notes (max 15)
 /afk [reason]	Set AFK status
 /stats setup/disable/status	Live member/bot counters
 /setlog category:<category> channel:<channel>	Route event logs
 /stealemoji emoji:<emoji> [name]	Add emoji to server
 /support	Support info/link
-/wallpaper [category] [name]	Live Wallhaven search (categories + free-text), 🎲 Next button walks cached results
+/stop	Leave voice. While 24/7 mode is on → refuses with a warning (only /247 mode:end frees it)
+/disconnect	Leave voice. While 24/7 mode is on → refuses with a warning (only /247 mode:end frees it)
+/vcstats [member]	Weekly VC time + hours needed to reach the active goal
+/vcstats_custom start_date:<YYYY-MM-DD> end_date:<YYYY-MM-DD> [member]	VC time for a custom date period
+/vctask role:<role>	Weekly VC time for every member with a role (leaderboard)
+/vchart [period]	Server-wide weekly VC activity chart (this / last week)
 
 # 🛠 Owner tools (new)
 
-/pinterest banner/pfp style:<text>	Style-matched image from Pinterest (unofficial scrape — may break)
-/pinterest search query:<text>	Batch of pin image links
-/pinterest pin url:<url>	Image from a pin URL
-/youtube search query:<text>	YouTube search via built-in yt-dlp
 Translate Message (context menu)	Right-click a message → translate to English (free Google endpoint, no key)
-
-# 🎵 Music
-
-Command	Description
-/play query:<name/URL>	Search + play/queue (URL → direct; name → top-5 picker)
-/search query:<text>	Search and choose from the top results (ephemeral select)
-/loop	Cycle repeat mode (off → track → queue)
-/filter preset:<preset>	Apply / clear an audio filter
-/lyrics	Show lyrics for the current track
-/grab	DM the current track to you
-/playlist play/create/list/add/delete/load/show	Manage persistent server playlists
-/clear	Clear the music queue
-/remove position:<n>	Remove a track from the queue by position
-/skipto position:<n>	Jump straight to a queue position
-/forceskip	Skip the current track (any user)
-/p1 /p2 /p3	Play local library tracks (owner only)
-/24-7	Stay in voice after the queue ends
-/radio station:<station>	Play a Tamil radio station 24/7 (run again to stop)
-/history	Show recently played tracks
-
-Requires being in a voice channel + ffmpeg. Now-playing card is rendered as a Pro-style animated image (musicard "quartz+" theme) with transport buttons.
 
 # 🔐 Security
 

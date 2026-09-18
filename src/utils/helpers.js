@@ -80,6 +80,22 @@ function formatDuration(millis) {
   return `${s}s`;
 }
 
+/**
+ * Discord presence label for a guild member.
+ * Returns a colored dot + readable name (Online / Idle / Do Not Disturb / Invisible).
+ */
+function presenceStatus(member) {
+  const status = member?.presence?.status || 'offline';
+  const map = {
+    online:  { dot: '🟢', label: 'Online' },
+    idle:    { dot: '🟡', label: 'Idle' },
+    dnd:     { dot: '🔴', label: 'Do Not Disturb' },
+    offline: { dot: '⚫', label: 'Invisible' },
+  };
+  const entry = map[status] || map.offline;
+  return `${entry.dot} ${entry.label}`;
+}
+
 // Splits a list of lines into chunks that each fit inside an embed field value (1024 chars).
 function chunkFieldValue(lines, limit = 1024) {
   const chunks = [];
@@ -97,4 +113,4 @@ function chunkFieldValue(lines, limit = 1024) {
   return chunks;
 }
 
-module.exports = { COLORS, embedUser, reply, formatDuration, chunkFieldValue, footer };
+module.exports = { COLORS, embedUser, reply, formatDuration, presenceStatus, chunkFieldValue, footer };

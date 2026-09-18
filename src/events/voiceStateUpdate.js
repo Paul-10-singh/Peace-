@@ -17,8 +17,6 @@ async function handleVoiceState(client, oldState, newState) {
   const guild = newState.guild || oldState.guild;
   if (!guild) return;
 
-  client.music?.handleVoiceStateUpdate(oldState, newState);
-
   const { channelId } = get(guild.id, 'tempvc');
   if (!channelId) return;
 

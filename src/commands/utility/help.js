@@ -10,7 +10,6 @@ const { helpEmbed, MODULE_COLORS, BRAND } = require('../../utils/decorations');
 const MODULE_LABELS = {
   utility: { emoji: '<a:setting:1537170658595708939>', label: 'Utility' },
   moderation: { emoji: '<a:moderator:1536416037577162835>', label: 'Moderation' },
-  music: { emoji: '<a:music:1536416032334417972>', label: 'Music' },
   security: { emoji: '<a:security:1536416039418597382>', label: 'Security' },
   owner: { emoji: '<:owner2:1537172065550082058>', label: 'Owner' },
 };

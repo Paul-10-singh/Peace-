@@ -12,6 +12,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent,
@@ -21,11 +22,6 @@ const client = new Client({
 });
 
 client.commands = new Collection();
-
-// Music engine (discord-player). Singleton attached to the client so all
-// commands/events can reach it via client.music.
-const { MusicManager } = require('./music/player');
-client.music = new MusicManager(client);
 
 // Safety net: a single failed API call / reply must never crash the bot.
 client.on('error', (err) => console.error(`${ANSI.red}[PeaceX] [×] Client error: ${err.message}${ANSI.reset}`));
@@ -65,6 +61,8 @@ fs.readdirSync(eventsDir).forEach((file) => {
     client.on(name, (...args) => event.execute(client, ...args));
   }
 });
+const { applyCommandGroups } = require('./utils/commandGroups');
+applyCommandGroups(client.commands);
 
 // NOTE: Command registration does NOT happen here. Startup only connects to
 // the gateway. Registration lives in exactly ONE place: scripts/deploy.js
@@ -73,12 +71,6 @@ fs.readdirSync(eventsDir).forEach((file) => {
 const { printStartupBanner } = require('./utils/decorations');
 
 client.once('clientReady', () => {
-  // Warm up the music engine so extractors are loaded before first use.
-  try {
-    client.music.getPlayer();
-  } catch (err) {
-    console.error(`${ANSI.red}[PeaceX] [×] Music engine init failed: ${err.message}${ANSI.reset}`);
-  }
   printStartupBanner({ tag: client.user.tag, commandCount: '—', status: 'Online' });
   console.log(`${ANSI.dim}[PeaceX] Ready. Commands are registered via "npm run deploy" (scripts/deploy.js).${ANSI.reset}`);
 });
@@ -86,7 +78,7 @@ client.once('clientReady', () => {
 client.login(process.env.DISCORD_TOKEN).catch((err) => {
   console.error(`${ANSI.red}[PeaceX] [×] Failed to log in: ${err.message}${ANSI.reset}`);
   if (/disallowed intents/i.test(err.message)) {
-    console.error('  This bot requests the "Server Members" and "Message Content" intents.');
+    console.error('  This bot requests the "Server Members", "Message Content", "Presence" and "Voice States" intents.');
     console.error('  Enable them in the Discord Developer Portal:');
     console.error('  https://discord.com/developers/applications -> your app -> Bot -> Privileged Gateway Intents');
   }

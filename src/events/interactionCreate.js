@@ -7,6 +7,7 @@ const { MessageFlags } = require('discord.js');
 const { reply } = require('../utils/helpers');
 const { setDmNotify } = require('../utils/afk');
 const { MAX_NOTES, getUserNotes, addNote, editNote } = require('../utils/notes');
+const { getCommandForInteraction } = require('../utils/commandGroups');
 
 /* eslint-disable */
 /* eslint-enable */
@@ -68,11 +69,12 @@ module.exports = {
   name: 'interactionCreate',
   async execute(client, interaction) {
     if (interaction.isChatInputCommand()) {
-      const command = client.commands.get(interaction.commandName);
-      if (!command) return;
+      const registeredCommand = client.commands.get(interaction.commandName);
+      if (!registeredCommand) return;
 
       const { hasAccess } = require('../utils/permissions');
       const sub = interaction.options.getSubcommand(false);
+      const command = getCommandForInteraction(registeredCommand, sub);
       const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.user, interaction.guild, command.data.name, sub);
       if (!allowed) {
         return interaction.reply({ content: '<:cross:1534849320568750221> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
@@ -126,9 +128,9 @@ module.exports = {
     }
 
     if (interaction.isButton()) {
-      if (interaction.customId.startsWith('wp_')) {
-        const wallpaper = require('../commands/utility/wallpaper.js');
-        await wallpaper.handleComponent(interaction);
+      if (interaction.customId.startsWith('sec:')) {
+        const { handleComponent } = require('../utils/securityPanel');
+        await handleComponent(interaction);
         return;
       }
       if (interaction.customId.startsWith('afk_')) {
@@ -154,11 +156,6 @@ module.exports = {
         await closeTicketFlow(interaction, client);
         return;
       }
-      if (interaction.customId.startsWith('music:')) {
-        const { handleMusicComponent } = require('../music/interactions');
-        await handleMusicComponent(interaction, client);
-        return;
-      }
       // Acknowledge buttons from older/removed panels so Discord does not show
       // "The application did not respond" for stale component messages.
       await interaction.deferUpdate().catch(() => {});
@@ -166,6 +163,11 @@ module.exports = {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId.startsWith('sec:add:')) {
+        const { handleComponent } = require('../utils/securityPanel');
+        await handleComponent(interaction);
+        return;
+      }
       if (interaction.customId === 'note_add' || interaction.customId.startsWith('note_edit_')) {
         await handleNoteModal(interaction);
       }
@@ -177,19 +179,14 @@ module.exports = {
     }
 
     if (interaction.isStringSelectMenu()) {
+      if (interaction.customId.startsWith('sec:')) {
+        const { handleComponent } = require('../utils/securityPanel');
+        await handleComponent(interaction);
+        return;
+      }
       if (interaction.customId.startsWith('tempvc:')) {
         const { handlePanel } = require('../utils/tempvcPanel');
         await handlePanel(interaction).catch(() => {});
-        return;
-      }
-      if (interaction.customId.startsWith('music:')) {
-        const { handleMusicComponent } = require('../music/interactions');
-        await handleMusicComponent(interaction, client);
-        return;
-      }
-      if (interaction.customId === 'wp_select_category') {
-        const wallpaper = require('../commands/utility/wallpaper.js');
-        await wallpaper.handleComponent(interaction);
         return;
       }
       if (interaction.customId === 'ticket_select' && interaction.values?.[0]) {

@@ -5,7 +5,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const ICONS = [
-  ['help', 'home.png'], ['help', 'music.gif'], ['help', 'Moderator.gif'],
+  ['help', 'home.png'], ['help', 'Moderator.gif'],
   ['help', 'security.gif'], ['help', 'owner.png'],
   ['auction', 'kick.png'], ['auction', 'ban.png'], ['auction', 'Nuke.gif'],
   ['auction', 'timeout.png'], ['auction', 'delete.png'],

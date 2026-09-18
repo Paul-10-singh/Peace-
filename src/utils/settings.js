@@ -32,11 +32,11 @@ const DEFAULTS = {
   profanity: { enabled: true, offenses: {} },
   autorole: { roleId: null },
   tempvc: { channelId: null, rooms: {} },
+  vc247: { channelId: null },
   logs: {
     moderation: null,
     utility: null,
     security: null,
-    music: null,
     welcome: null,
     goodbye: null,
     role: null,

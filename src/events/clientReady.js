@@ -8,6 +8,7 @@
  */
 const { ActivityType } = require('discord.js');
 const { init } = require('../utils/inviteCache');
+const vcTracker = require('../utils/vcTracker');
 
 // Format a number like the Pro bot (1.2K / 3.4M / 5.6B).
 function fmtCount(n) {
@@ -44,5 +45,14 @@ module.exports = {
     };
     rotate();
     setInterval(rotate, 10_000);
+
+    // VC activity tracking: seed members already in voice, then schedule the
+    // weekly Sunday 11 PM owner report.
+    try {
+      vcTracker.seedActiveSessions(client);
+      vcTracker.startWeeklyReportScheduler(client);
+    } catch (err) {
+      console.error(`[PeaceX] [vcTracker] Failed to start: ${err.message}`);
+    }
   },
 };

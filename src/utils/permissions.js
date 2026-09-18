@@ -19,18 +19,18 @@ const TIERS = { EVERYONE: 1, ADMIN: 2, OWNER: 3, TRUSTED: 4 };
 // Commands fully available to everyone (all subcommands if any).
 const EVERYONE = new Set([
   // utility
-  'help', 'all', 'ping', 'support', 'botinfo', 'avatar', 'serverinfo', 'userinfo', 'roles',
-  'poll', 'remind', 'afk', 'todo', 'note', 'wallpaper',
-  // music
-  'play', 'spotify', 'fx', '24-7', 'connect',
-  'skip', 'queue', 'volume', 'pause', 'resume', 'shuffle', 'history', '8d', 'booster', 'controls', 'mix', 'disconnect',
-  'seek', 'autoplay', 'radio', 'playlist',
+  'help', 'all', 'ping', 'support', 'avatar', 'serverinfo', 'userinfo', 'roles',
+  'poll', 'remind', 'afk', 'note',
+  // voice (24/7 aware)
+  'stop', 'disconnect',
+  // voice activity stats
+  'vcstats', 'vcstats_custom', 'vchart', 'vctask',
 ]);
 
 // Commands gated by the server-specific whitelist (all subcommands if any).
 const ADMIN = new Set([
   // moderation
-  'timeout', 'untimeout', 'warn', 'warnings',
+  'timeout', 'untimeout', 'warn',
   // words / anti-words filters
   'words', 'antiwords',
   // anti-spam
@@ -41,7 +41,6 @@ const ADMIN = new Set([
 
 // Commands gated by the bot-wide trusted list (owner OR /trusted member) - all subcommands.
 const TRUSTED = new Set([
-  'autoreact', 'autoresponder',
   'kick', 'ban', 'timeout',
 ]);
 

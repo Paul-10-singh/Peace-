@@ -38,20 +38,19 @@ const BRAND = {
 // Module-level emoji icons shown in embed titles
 const MODULE_ICONS = {
   utility:    '🔧',
-  music:      '🎵',
   moderation: '🛡️',
   security:   '🔒',
   owner:      '👑',
   default:    '✦',
 };
 
-// Animated status emoji
+// Status emoji (PeaceX server custom emojis)
 const STATUS = {
-  SUCCESS: '<a:success_tick:1536133967709741086>',   // animated green tick
-  ERROR:   '<a:error_cross:1536133920989650989>',    // animated red cross
-  WARNING: '⚠️',
-  INFO:    '💠',
-  LOADING: '<a:loading:1534559000000000002>',        // animated spinner fallback
+  SUCCESS: '<:correct:1550406329942937632>',   // green tick
+  ERROR:   '<:wrong:1550406332727820398>',     // red cross
+  WARNING: '<:warning:1550416878894190653>',
+  INFO:    '<:info:1550416810648535131>',
+  LOADING: '<a:loading:1534559000000000002>',  // animated spinner fallback
 };
 
 const FOOTER_TEXT = `${BRAND.name}`;
@@ -147,7 +146,7 @@ function helpEmbed(opts = {}) {
 
 /**
  * Category embed — prepends the module icon to the title.
- * category: 'utility' | 'music' | 'moderation' | 'security' | 'owner'
+ * category: 'utility' | 'moderation' | 'security' | 'owner'
  */
 function categoryEmbed(category, opts = {}) {
   const icon = MODULE_ICONS[category] || MODULE_ICONS.default;
@@ -220,7 +219,6 @@ function consoleStatus(mark, text) {
 const MODULE_COLORS = {
   owner:      0x353535,
   moderation: 0x353535,
-  music:      0x353535,
   security:   0x353535,
   utility:    0x353535,
 };

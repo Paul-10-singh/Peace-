@@ -11,7 +11,6 @@ const LOG_CATEGORIES = [
   'moderation',
   'utility',
   'security',
-  'music',
   'welcome',
   'goodbye',
   'role',

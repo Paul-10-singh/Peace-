@@ -5,43 +5,45 @@
  * ============================================================
  *  THE ONLY command-registration entry point in this codebase.
  * ============================================================
- *  - Registers the full command set in GLOBAL scope only.
- *  - Never registers to any guild scope (that mixed-scope
- *    behavior is what caused duplicate commands in the past).
- *  - Verifies what Discord actually stored right after writing.
- *  - Wipes any stale guild-scoped commands that exist on the
- *    guilds this bot is a member of.
+ *  Default flow — SINGLE SCOPE (commands show exactly ONCE in every server):
+ *    1) Push the full set to GLOBAL (reaches every server within ~1h).
+ *    2) Wipe guild-scoped commands from ALL guilds (including the two camp
+ *       guilds TNC OFFICIAL + PeaceX Hq). No command ever lives in both
+ *       guild + global scope, so the slash menu never shows duplicates.
  *
- *  Run:  npm run deploy
+ *  Flags:
+ *    --guild-only   push ONLY to the two camp guilds (instant, but each
+ *                   command shows a temporary duplicate next to the global
+ *                   copy until the next default deploy wipes guild scopes).
+ *    --pure-global  same as the default single-scope flow (kept for
+ *                   convenience, e.g. the `deploy:global` npm script).
  *
- *  DO NOT add any other commands.set() / REST PUT call anywhere
- *  else (src/index.js startup does NOT touch registration).
+ *  Run:  npm run deploy [-- --guild-only | -- --pure-global]
+ *
+ *  NOTE: `/refresh` registers the SAME set (via scripts/loadCommands.js) for
+ *  a single guild instantly; a subsequent default `npm run deploy` removes
+ *  that guild copy. DO NOT add any other commands.set() / REST PUT call
+ *  anywhere else (src/index.js startup does NOT touch registration).
  */
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { loadCommands } = require('./loadCommands');
+
+// Same two camps used by scripts/guild-sync.js (guild-only fast path).
+const CAMP_GUILDS = [
+  { id: '1340379968571576341', name: 'TNC OFFICIAL' },
+  { id: '1510358429183774910', name: 'PeaceX Hq' },
+];
+
+const GUILD_ONLY = process.argv.includes('--guild-only');
 
 for (const line of fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
   const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
   if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
 }
 
-// Same loader the bot itself uses (src/index.js) so counts always match.
-function loadCommands() {
-  const list = [];
-  const commandsDir = path.join(__dirname, '..', 'src', 'commands');
-  fs.readdirSync(commandsDir, { withFileTypes: true }).forEach((dir) => {
-    if (!dir.isDirectory()) return;
-    for (const file of fs.readdirSync(path.join(commandsDir, dir.name))) {
-      if (!file.endsWith('.js')) continue;
-      const command = require(path.join(commandsDir, dir.name, file));
-      if (command?.data?.name) list.push(command.data.toJSON());
-    }
-  });
-  return list;
-}
-
-(async () => {
+async function main() {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   const commands = loadCommands();
   const appId = process.env.CLIENT_ID;
@@ -49,12 +51,31 @@ function loadCommands() {
 
   console.log(`[deploy] Loading ${commands.length} commands from src/commands/...`);
 
-  // 1) Write the full set to GLOBAL scope. This REPLACES whatever was there
-  //    before, so stale global registrations can never accumulate.
-  const putResult = await rest.put(Routes.applicationCommands(appId), { body: commands });
-  console.log(`[deploy] PUT global -> ${putResult.length} commands stored.`);
+  if (commands.length > 100) {
+    throw new Error(
+      `Deploy aborted — ${commands.length} commands exceed Discord's 100 global command limit. ` +
+        `Add more names to scripts/exclude.js (currently excluded: ${require('./exclude').EXCLUDED_COMMANDS.length}).`
+    );
+  }
 
-  // 2) VERIFY: read back what Discord actually has (not what we sent).
+  // ── Fast path: instant push to the two camp guilds only ───────────────
+  if (GUILD_ONLY) {
+    for (const g of CAMP_GUILDS) {
+      const stored = await rest.put(Routes.applicationGuildCommands(appId, g.id), { body: commands });
+      console.log(`[deploy] ➜ GUILD  "${g.name}" (${g.id}) -> ${stored.length} commands (instant).`);
+    }
+    console.log(
+      '[deploy] ✔ Guild-only deploy done. These camps temporarily show every command twice ' +
+        '(guild copy + global copy); run `npm run deploy` to wipe the guild copies.'
+    );
+    process.exit(0);
+  }
+
+  // ── Step 1: GLOBAL (single scope) ─────────────────────────────────────
+  const putResult = await rest.put(Routes.applicationCommands(appId), { body: commands });
+  console.log(`[deploy] ➜ GLOBAL -> ${putResult.length} commands stored.`);
+
+  // ── Step 2: VERIFY global ─────────────────────────────────────────────
   const stored = await rest.get(Routes.applicationCommands(appId));
   const names = stored.map((c) => c.name);
   const dupes = names.filter((n, i) => names.indexOf(n) !== i);
@@ -72,18 +93,19 @@ function loadCommands() {
   }
   console.log(`[deploy] ✔ Verified: exactly ${stored.length} global commands, no duplicates.`);
 
-  // 3) MIXED-SCOPE GUARD: commands must live in EXACTLY ONE scope (global).
-  //    Check every guild this bot is in; wipe any stale guild-scoped
-  //    commands (from old deploys) and confirm they stayed wiped.
+  // ── Step 3: WIPE guild-scoped commands from EVERY guild ───────────────
+  // Single-scope policy: a command may not live in guild+global at the same
+  // time, otherwise the slash menu shows it twice in that server.
   const guilds = await rest.get('/users/@me/guilds');
   let guildClean = true;
+
   for (const guild of guilds) {
     const guildCommands = await rest.get(Routes.applicationGuildCommands(appId, guild.id));
     if (guildCommands.length) {
       await rest.put(Routes.applicationGuildCommands(appId, guild.id), { body: [] });
       console.warn(
         `[deploy] ⚠ Found ${guildCommands.length} stale guild-scoped command(s) in guild ` +
-          `${guild.name} (${guild.id}) — wiped to enforce the global-only policy.`
+          `${guild.name} (${guild.id}) — wiped to enforce the single-scope policy.`
       );
     }
     const recheck = await rest.get(Routes.applicationGuildCommands(appId, guild.id));
@@ -96,10 +118,13 @@ function loadCommands() {
   }
   if (!guildClean) process.exit(1);
 
-  console.log('[deploy] ✔ Done. Commands registered in exactly ONE scope (global).');
-  console.log('         Note: global changes propagate to all servers, up to ~1 hour.');
+  console.log('[deploy] ✔ Done. Single-scope global deploy — every command shows exactly ONCE.');
+  console.log('         New commands reach the camp guilds within ~1h. For instant camp access:');
+  console.log('         npm run deploy -- --guild-only   (temporary duplicate until next deploy)');
   process.exit(0);
-})().catch((err) => {
+}
+
+main().catch((err) => {
   console.error('[deploy] ✘ FAILED:', err.message);
   process.exit(1);
 });

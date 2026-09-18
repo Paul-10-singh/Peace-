@@ -19,6 +19,8 @@ module.exports = {
 
     if (!member) return reply(interaction, { embeds: [warningEmbed({ description: 'That user is not in this server.' })], ephemeral: true });
 
+    const sub = interaction.options.getSubcommand();
+
     if (sub === 'list') {
       const roles = member.roles.cache.filter((r) => r.id !== interaction.guild.id).map((r) => `<@&${r.id}>`).join(' ') || 'None';
       return reply(interaction, {

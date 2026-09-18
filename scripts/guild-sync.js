@@ -1,6 +1,8 @@
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { isCommandExcluded } = require('./exclude');
+const { applyCommandGroups } = require('../src/utils/commandGroups');
 
 for (const line of fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
   const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
@@ -15,8 +17,13 @@ function loadCommands() {
     for (const file of fs.readdirSync(path.join(commandsDir, dir.name))) {
       if (!file.endsWith('.js')) continue;
       const command = require(path.join(commandsDir, dir.name, file));
-      if (command?.data?.name) list.push(command.data.toJSON());
+      if (command?.data?.name && !isCommandExcluded(command.data.name)) list.push(command.data.toJSON());
     }
+  });
+  applyCommandGroups({
+    get: (name) => list.find((command) => command.name === name),
+    set: () => {},
+    delete: () => {},
   });
   return list;
 }
