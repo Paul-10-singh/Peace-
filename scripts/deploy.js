@@ -58,17 +58,14 @@ async function main() {
     );
   }
 
-  // ── Fast path: instant push to the two camp guilds only ───────────────
+  // ── --guild-only is deprecated ────────────────────────────────────────
+  // Guild-scoped copies alongside global copies are exactly what caused
+  // duplicate commands in the slash menu. Always use single global scope.
   if (GUILD_ONLY) {
-    for (const g of CAMP_GUILDS) {
-      const stored = await rest.put(Routes.applicationGuildCommands(appId, g.id), { body: commands });
-      console.log(`[deploy] ➜ GUILD  "${g.name}" (${g.id}) -> ${stored.length} commands (instant).`);
-    }
-    console.log(
-      '[deploy] ✔ Guild-only deploy done. These camps temporarily show every command twice ' +
-        '(guild copy + global copy); run `npm run deploy` to wipe the guild copies.'
+    console.warn(
+      '[deploy] ⚠ --guild-only is deprecated. Falling through to the single-scope ' +
+        'global deploy so no duplicate commands are created.'
     );
-    process.exit(0);
   }
 
   // ── Step 1: GLOBAL (single scope) ─────────────────────────────────────
@@ -119,8 +116,8 @@ async function main() {
   if (!guildClean) process.exit(1);
 
   console.log('[deploy] ✔ Done. Single-scope global deploy — every command shows exactly ONCE.');
-  console.log('         New commands reach the camp guilds within ~1h. For instant camp access:');
-  console.log('         npm run deploy -- --guild-only   (temporary duplicate until next deploy)');
+  console.log('         Reach camp guilds instantly: run `npm run deploy` (global); guild-only deploys');
+  console.log('         are disabled because they duplicate commands in the slash menu.');
   process.exit(0);
 }
 

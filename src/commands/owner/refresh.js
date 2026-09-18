@@ -15,11 +15,14 @@ module.exports = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // Same loader deploy.js uses, so /refresh registers exactly the deployed
-    // set (excluding the scripts/exclude.js list).
+    // set (excluding the scripts/exclude.js list). Pushed to GLOBAL scope only —
+    // guild-scoped copies are what caused duplicate commands in the slash menu.
     const commands = loadCommands();
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    await rest.put(Routes.applicationGuildCommands(client.user.id, interaction.guild.id), { body: commands });
+    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
 
-    await interaction.editReply(`Refreshed **${commands.length}** commands for this server.`);
+    await interaction.editReply(
+      `Refreshed **${commands.length}** commands (global scope). If any old guild-scoped copies linger, run \`npm run deploy\` once to wipe them.`
+    );
   },
 };
