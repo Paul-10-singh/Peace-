@@ -18,7 +18,6 @@
  */
 const path = require('path');
 const fs = require('fs');
-const { STATUS } = require('./decorations');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -29,20 +28,21 @@ const WEEKLY_GOAL_HOURS = (() => {
   return Number.isFinite(n) && n > 0 ? n : 10;
 })();
 
-// Emoji set used by the chart / stats embeds. Status ticks reuse Peace's
-// custom decorations; the rest are PeaceX server custom emojis.
+// Emoji set used by the chart / stats embeds. All universal unicode so they
+// render correctly in EVERY server (custom emojis showed as `:name:` text
+// anywhere outside the server that owned them).
 const E = {
-  correct: STATUS.SUCCESS,
-  wrong: STATUS.ERROR,
-  time: '<:time:1550416865245790349>',
-  status: '<:status:1550416859529220096>',
-  weeklychart: '<:weeklychart:1550416881209446500>',
-  period: '<:period:1550416836233924658>',
-  target: '<:target:1550416861764657262>',
-  owner: '<:owner:1550416830898770040>',
-  goalcompleted: '<:goalcompleted:1550416803459637268>',
-  ACTIVEstatus: '<:ACTIVEstatus:1550416781829476383>',
-  INACTIVEstatus: '<:INACTIVEstatus:1550416808182550578>',
+  correct: '✅',
+  wrong: '❌',
+  time: '⏱️',
+  status: '📊',
+  weeklychart: '📈',
+  period: '📅',
+  target: '🎯',
+  owner: '👑',
+  goalcompleted: '🏆',
+  ACTIVEstatus: '🟢',
+  INACTIVEstatus: '🔴',
 };
 
 // ── Date helpers (local time, matching the original build) ──────────────

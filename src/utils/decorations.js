@@ -44,13 +44,14 @@ const MODULE_ICONS = {
   default:    '✦',
 };
 
-// Status emoji (PeaceX server custom emojis)
+// Status emoji (universal unicode — renders in every server, unlike custom
+// emojis which showed as broken `:name:` text outside the host server)
 const STATUS = {
-  SUCCESS: '<:correct:1550406329942937632>',   // green tick
-  ERROR:   '<:wrong:1550406332727820398>',     // red cross
-  WARNING: '<:warning:1550416878894190653>',
-  INFO:    '<:info:1550416810648535131>',
-  LOADING: '<a:loading:1534559000000000002>',  // animated spinner fallback
+  SUCCESS: '✅',
+  ERROR:   '❌',
+  WARNING: '⚠️',
+  INFO:    'ℹ️',
+  LOADING: '⏳',
 };
 
 const FOOTER_TEXT = `${BRAND.name}`;
