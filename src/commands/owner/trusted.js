@@ -29,7 +29,7 @@ module.exports = {
       const ids = whitelist.list(interaction.guild.id);
       const extra = whitelist.isHealthy()
         ? 'Stored in data/whitelist.json'
-        : '<a:08_whiteexmark:1536133341965848668> Whitelist storage failed to load - access is denied for everyone.';
+        : '<a:wrong:1550504971303395430> Whitelist storage failed to load - access is denied for everyone.';
       return reply(interaction, {
         embeds: [
           commandEmbed({

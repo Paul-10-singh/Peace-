@@ -19,7 +19,7 @@ const whitelist = require('./whitelist');
 
 const LEVELS = { OWNER: 'owner', TRUSTED: 'trusted' };
 
-const DENIED_MESSAGE = "<:cross:1534849320568750221> You don't have permission to use this command.";
+const DENIED_MESSAGE = "<a:wrong:1550504971303395430> You don't have permission to use this command.";
 
 // Owner OR bot-wide trusted member.
 function isOwnerOrTrusted(userId, guildId) {

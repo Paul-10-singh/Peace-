@@ -58,7 +58,7 @@ module.exports = {
       return interaction.editReply({
         embeds: [
 commandEmbed({
-          title: '<a:nuke:1536416051821289543> Channel Nuked',
+          title: '<a:warning:1550504965955653723> Channel Nuked',
           description: 'Channel deleted, but recreation failed.',
         }),
         ],
@@ -68,7 +68,7 @@ commandEmbed({
     await created.setPosition(position).catch(() => {});
 
     const embed = commandEmbed({
-      title: '<a:nuke:1536416051821289543> Channel Nuked',
+      title: '<a:warning:1550504965955653723> Channel Nuked',
       description: `**#${created.name}** has been recreated.`,
       fields: [
         { name: 'Channel', value: `#${created.name}`, inline: true },

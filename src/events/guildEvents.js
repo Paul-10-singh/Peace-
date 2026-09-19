@@ -40,10 +40,10 @@ module.exports = {
           name: client.user.username,
           iconURL: client.user.displayAvatarURL({ size: 128 }),
         })
-        .setTitle('<:ticknew:1536133967709741086> Thank you for adding me!')
+        .setTitle('<a:correct:1550504846199758928> Thank you for adding me!')
         .setDescription(
           `Hey **${owner.username}**! 👋\n\n` +
-          `<:ticknew:1536133967709741086> **${client.user.username}** has been successfully added to **${guild.name}**.\n\n` +
+          `<a:correct:1550504846199758928> **${client.user.username}** has been successfully added to **${guild.name}**.\n\n` +
           `> 📌 Use \`/help\` to explore all commands.\n` +
           `> ⚙️ Use \`/security\` to set up auto-moderation.\n` +
           `> 🔧 Use \`/setlog\` to configure logging channels.`
@@ -80,7 +80,7 @@ module.exports = {
         .setTitle('😔 I was removed from your server')
         .setDescription(
           `Hey **${owner.username}**,\n\n` +
-          `<:wrongerror:1536133920989650989> **${client.user.username}** was removed from **${guild.name}**.\n\n` +
+          `<a:wrong:1550504971303395430> **${client.user.username}** was removed from **${guild.name}**.\n\n` +
           `Sorry if I didn't meet your expectations! If you had any issues, please let us know so we can improve.\n\n` +
           `> 💬 Drop your feedback at our support server.\n` +
           `> 🔄 You can always **add me back** if you change your mind!`

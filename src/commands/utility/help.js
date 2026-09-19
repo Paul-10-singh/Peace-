@@ -8,10 +8,10 @@ const { canRunAny } = require('../../utils/permissions');
 const { helpEmbed, MODULE_COLORS, BRAND } = require('../../utils/decorations');
 
 const MODULE_LABELS = {
-  utility: { emoji: '<a:setting:1537170658595708939>', label: 'Utility' },
-  moderation: { emoji: '<a:moderator:1536416037577162835>', label: 'Moderation' },
-  security: { emoji: '<a:security:1536416039418597382>', label: 'Security' },
-  owner: { emoji: '<:owner2:1537172065550082058>', label: 'Owner' },
+  utility: { emoji: '<:house:1550835377772822629>', label: 'Utility' },
+  moderation: { emoji: '<a:Moderator:1550835001065603162>', label: 'Moderation' },
+  security: { emoji: '<a:security:1550835008422416454>', label: 'Security' },
+  owner: { emoji: '<a:owner:1550504913815994418>', label: 'Owner' },
 };
 
 function getModules(client, user, guild) {
@@ -96,7 +96,7 @@ function buildModuleEmbed(client, folder, user, guild) {
 
 function buildSelectMenu(client, user, guild) {
   const options = [
-    { label: 'Home', value: 'home', description: 'Overview & getting started', emoji: '<:home:1536416030329544755>' },
+    { label: 'Home', value: 'home', description: 'Overview & getting started', emoji: '<:home:1550834994853847040>' },
     ...getModules(client, user, guild).map((m) => {
       let count = 0;
       for (const command of client.commands.values()) {

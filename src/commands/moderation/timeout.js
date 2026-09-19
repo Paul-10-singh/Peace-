@@ -29,7 +29,7 @@ module.exports = {
     await member.timeout(minutes * 60 * 1000, reason);
 
     const embed = commandEmbed({
-      title: '<:timeout:1536416054010445877> Member Timed Out',
+      title: '<:timer:1550504958166573156> Member Timed Out',
       description: `**${target.tag}** has been timed out.`,
       fields: [
         { name: 'User', value: target.tag, inline: true },

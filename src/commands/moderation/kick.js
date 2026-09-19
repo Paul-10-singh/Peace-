@@ -28,7 +28,7 @@ module.exports = {
     await member.kick(reason);
 
     const embed = commandEmbed({
-      title: '<:kick:1536416044334317591> Member Kicked',
+      title: '<a:warning:1550504965955653723> Member Kicked',
       description: `**${target.tag}** has been kicked from the server.`,
       fields: [
         { name: 'User', value: target.tag, inline: true },

@@ -29,7 +29,7 @@ module.exports = {
     await interaction.guild.members.ban(target.id, { reason, deleteMessageSeconds: days * 86400 });
 
     const embed = commandEmbed({
-      title: '<:ban:1536416046859288577> Member Banned',
+      title: '<a:warning:1550504965955653723> Member Banned',
       description: `**${target.tag}** has been banned from the server.`,
       fields: [
         { name: 'User', value: target.tag, inline: true },

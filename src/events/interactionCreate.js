@@ -54,7 +54,7 @@ async function handleNoteModal(interaction) {
       });
     }
     const { note } = addNote(interaction.user.id, content);
-    return interaction.reply({ content: `<:ticknew:1536133967709741086> Note **#${note.number}** saved.`, flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: `<a:correct:1550504846199758928> Note **#${note.number}** saved.`, flags: MessageFlags.Ephemeral });
   }
 
   const number = parseInt(interaction.customId.replace('note_edit_', ''), 10);
@@ -62,7 +62,7 @@ async function handleNoteModal(interaction) {
   if (!note) {
     return interaction.reply({ content: `You don't have a note **#${number}**.`, flags: MessageFlags.Ephemeral });
   }
-  return interaction.reply({ content: `<:ticknew:1536133967709741086> Note **#${number}** updated.`, flags: MessageFlags.Ephemeral });
+  return interaction.reply({ content: `<a:correct:1550504846199758928> Note **#${number}** updated.`, flags: MessageFlags.Ephemeral });
 }
 
 module.exports = {

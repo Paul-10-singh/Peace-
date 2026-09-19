@@ -64,7 +64,7 @@ module.exports = {
       await interaction.editReply({
         embeds: [
           commandEmbed({
-            title: '<:delete:1536416055851876354> Messages Purged',
+            title: '<:delete:1550504848275931246> Messages Purged',
             description: `Deleted **${deleted.size}** message(s)${user ? ` (from ${user.tag})` : ''}.`,
             fields: [
               { name: 'Channel', value: `#${interaction.channel.name}`, inline: true },
@@ -92,7 +92,7 @@ module.exports = {
 
       const embed = deleted.size > 0
         ? commandEmbed({
-            title: '<:delete:1536416055851876354> Purged User Messages',
+            title: '<:delete:1550504848275931246> Purged User Messages',
             description: `Deleted **${deleted.size}** message${deleted.size === 1 ? '' : 's'} from **${user.tag}**.`,
             fields: [
               { name: 'Channel', value: `#${interaction.channel.name}`, inline: true },
@@ -137,7 +137,7 @@ module.exports = {
       }
 
       const embed = commandEmbed({
-        title: '<:delete:1536416055851876354> Purged Across Server',
+        title: '<:delete:1550504848275931246> Purged Across Server',
         description: `Deleted **${total}** message${total === 1 ? '' : 's'} from **${user.tag}** across ${channels.length} channels.`,
       });
       await interaction.editReply({ embeds: [embed] });

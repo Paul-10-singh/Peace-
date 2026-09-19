@@ -46,7 +46,7 @@ module.exports = {
       await interaction.guild.members.unban(user.id, reason);
 
       const embed = commandEmbed({
-        title: '<:ban:1536416046859288577> Member Unbanned',
+        title: '<a:correct:1550504846199758928> Member Unbanned',
         description: `**${user.tag}** can join the server again.`,
         fields: [
           { name: 'User', value: user.tag, inline: true },
@@ -93,7 +93,7 @@ module.exports = {
     }
 
     const embed = commandEmbed({
-      title: '<:ban:1536416046859288577> Everyone Unbanned',
+      title: '<a:correct:1550504846199758928> Everyone Unbanned',
       description: `Unbanned **${done}** member${done === 1 ? '' : 's'}${failed ? ` · **${failed}** failed` : ''}.`,
       fields: [{ name: 'Reason', value: reason }],
       extra: `By ${interaction.user.tag}`,

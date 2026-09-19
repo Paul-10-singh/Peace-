@@ -382,7 +382,7 @@ async function tryRunMessageCommand(client, message) {
   const command = client.commands.get(name);
   if (!command) {
     await message.channel
-      .send({ content: `<:cross:1534849320568750221> Command **\`${name}\`** not found. Try \`n help\`.` })
+      .send({ content: `<a:wrong:1550504971303395430> Command **\`${name}\`** not found. Try \`n help\`.` })
       .catch(() => {});
     return true;
   }
@@ -396,7 +396,7 @@ async function tryRunMessageCommand(client, message) {
     : hasAccess(message.member || message.author, message.guild, command.data.name, resolved.sub);
   if (!allowedAccess) {
     await message.channel
-      .send({ content: "<:cross:1534849320568750221> You don't have permission to use this command." })
+      .send({ content: "<a:wrong:1550504971303395430> You don't have permission to use this command." })
       .catch(() => {});
     return true;
   }

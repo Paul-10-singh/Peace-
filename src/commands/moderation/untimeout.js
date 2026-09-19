@@ -27,7 +27,7 @@ module.exports = {
     await member.timeout(null, reason);
 
     const embed = commandEmbed({
-      title: '<:timeout:1536416054010445877> Timeout Removed',
+      title: '<a:correct:1550504846199758928> Timeout Removed',
       description: `**${target.tag}** is no longer timed out.`,
       fields: [
         { name: 'User', value: target.tag, inline: true },

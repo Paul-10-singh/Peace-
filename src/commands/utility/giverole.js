@@ -45,7 +45,7 @@ module.exports = {
         return reply(interaction, { embeds: [warningEmbed({ description: 'That member already has this role.' })], ephemeral: true });
       }
       await member.roles.add(role.id, `Role given by ${interaction.user.tag}`);
-      const text = `<:tick:1534848038609358939> Gave <@&${role.id}> to ${target.tag}.`;
+      const text = `<a:correct:1550504846199758928> Gave <@&${role.id}> to ${target.tag}.`;
       await reply(interaction, { embeds: [successEmbed({ title: 'Role assigned', description: text })] });
       await sendLog(interaction.client, interaction.guild.id, 'role', { content: text });
     } else {
@@ -53,7 +53,7 @@ module.exports = {
         return reply(interaction, { embeds: [warningEmbed({ description: 'That member does not have this role.' })], ephemeral: true });
       }
       await member.roles.remove(role.id, `Role removed by ${interaction.user.tag}`);
-      const text = `<:tick:1534848038609358939> Removed <@&${role.id}> from ${target.tag}.`;
+      const text = `<a:correct:1550504846199758928> Removed <@&${role.id}> from ${target.tag}.`;
       await reply(interaction, { embeds: [successEmbed({ title: 'Role removed', description: text })] });
       await sendLog(interaction.client, interaction.guild.id, 'role', { content: text });
     }
