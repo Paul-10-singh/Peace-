@@ -33,8 +33,6 @@ const EXCLUDED_COMMANDS = [
   'leaveserver',
   // niche utility commands
   'roleicon',
-  'say',
-  'lock',
 ];
 
 function isCommandExcluded(name) {

@@ -13,7 +13,7 @@ All commands are slash (`/`) commands.
 🟠 Trusted	    owner or /trusted list   current server only
 🔴 Owner	    Owner/co-owner      only	OWNER_ID global; /extraowner add current server
 
-# Denied → ❌ You don't have permission to use this command.
+# Denied → <a:wrong:1550504971303395430> You don't have permission to use this command.
 ## Discord-native permissions (ManageRoles, ManageChannels, etc.) still apply on top of the tier.
 
 

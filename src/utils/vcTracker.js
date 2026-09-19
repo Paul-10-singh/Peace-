@@ -38,21 +38,19 @@ const WEEKLY_GOAL_HOURS = (() => {
   return Number.isFinite(n) && n > 0 ? n : 10;
 })();
 
-// Emoji set used by the chart / stats embeds. All universal unicode so they
-// render correctly in EVERY server (custom emojis showed as `:name:` text
-// anywhere outside the server that owned them).
+// Emoji set used by the chart / stats embeds (host-server custom emojis).
 const E = {
-  correct: '✅',
-  wrong: '❌',
-  time: '⏱️',
-  status: '📊',
-  weeklychart: '📈',
-  period: '📅',
-  target: '🎯',
-  owner: '👑',
-  goalcompleted: '🏆',
-  ACTIVEstatus: '🟢',
-  INACTIVEstatus: '🔴',
+  correct: '<a:correct:1550504846199758928>',
+  wrong: '<a:wrong:1550504971303395430>',
+  time: '<a:time:1550504955691929630>',
+  status: '<a:status:1550504949882953820>',
+  weeklychart: '<a:weeklychart:1550504968119652503>',
+  period: '<a:period:1550504918756892682>',
+  target: '<a:target:1550504952349196479>',
+  owner: '<a:owner:1550504913815994418>',
+  goalcompleted: '<a:goalcompleted:1550504884049154159>',
+  ACTIVEstatus: '<a:ACTIVEstatus:1550504832106766406>',
+  INACTIVEstatus: '<a:INACTIVEstatus:1550504891758149773>',
 };
 
 // ── Date helpers (local time, matching the original build) ──────────────

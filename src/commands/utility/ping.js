@@ -49,7 +49,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(BRAND.module)
-      .setTitle(`<:ping:1550416838976872549> Ping`)
+      .setTitle(`<a:status:1550504949882953820> Ping`)
       .setDescription(
         '```\n' +
           ['Latency   : ' + latency + ' ms', 'WebSocket : ' + ws + ' ms', 'Status    : ' + latencyStatus(latency)].join(

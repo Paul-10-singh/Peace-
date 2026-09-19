@@ -44,11 +44,10 @@ const MODULE_ICONS = {
   default:    '✦',
 };
 
-// Status emoji (universal unicode — renders in every server, unlike custom
-// emojis which showed as broken `:name:` text outside the host server)
+// Status emoji (host-server custom emojis)
 const STATUS = {
-  SUCCESS: '✅',
-  ERROR:   '❌',
+  SUCCESS: '<a:correct:1550504846199758928>',
+  ERROR:   '<a:wrong:1550504971303395430>',
   WARNING: '⚠️',
   INFO:    'ℹ️',
   LOADING: '⏳',
@@ -105,12 +104,12 @@ function build(opts, color, mark, defaultTitle) {
 
 // --- Public embed builders ---------------------------------------------------
 
-/** ✅ Action succeeded */
+/** <a:correct:1550504846199758928> Action succeeded */
 function successEmbed(opts = {}) {
   return build(opts, BRAND.success, null, 'Success');
 }
 
-/** ❌ Something went wrong */
+/** <a:wrong:1550504971303395430> Something went wrong */
 function errorEmbed(opts = {}) {
   return build(opts, BRAND.error, null, 'Something went wrong');
 }

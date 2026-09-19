@@ -70,14 +70,23 @@ module.exports = {
   async execute(client, interaction) {
     if (interaction.isChatInputCommand()) {
       const registeredCommand = client.commands.get(interaction.commandName);
-      if (!registeredCommand) return;
+      if (!registeredCommand) {
+        // Stale global copy (e.g. /vcstats before the new /vc set propagates)
+        // or a renamed/removed command — reply instead of timing out.
+        return interaction
+          .reply({
+            content: '<a:wrong:1550504971303395430> This command is outdated — the owner needs to re-sync commands (`/refresh`).',
+            flags: MessageFlags.Ephemeral,
+          })
+          .catch(() => {});
+      }
 
       const { hasAccess } = require('../utils/permissions');
       const sub = interaction.options.getSubcommand(false);
       const command = getCommandForInteraction(registeredCommand, sub);
       const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.member || interaction.user, interaction.guild, command.data.name, sub);
       if (!allowed) {
-        return interaction.reply({ content: '<:cross:1534849320568750221> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: '<a:wrong:1550504971303395430> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
       }
 
       try {
@@ -101,12 +110,18 @@ module.exports = {
 
     if (interaction.isMessageContextMenuCommand() || interaction.isUserContextMenuCommand()) {
       const command = client.commands.get(interaction.commandName);
-      if (!command) return;
-
+      if (!command) {
+        return interaction
+          .reply({
+            content: '<a:wrong:1550504971303395430> This command is outdated — the owner needs to re-sync commands (`/refresh`).',
+            flags: MessageFlags.Ephemeral,
+          })
+          .catch(() => {});
+      }
       const { hasAccess } = require('../utils/permissions');
       const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.member || interaction.user, interaction.guild, command.data.name, undefined);
       if (!allowed) {
-        return interaction.reply({ content: '<:cross:1534849320568750221> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: '<a:wrong:1550504971303395430> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
       }
 
       try {

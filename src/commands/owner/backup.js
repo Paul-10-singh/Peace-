@@ -244,7 +244,7 @@ async function runFilesBackup(interaction) {
 
     const delivered = results.filter((r) => !r.failed);
     const delivery = results
-      .map((r) => `- ${r.failed ? '❌' : '✅'} **${r.payload.label}** (${mb(r.payload.size)} MB)${r.method === 'link' ? ' — download link sent (48 h)' : ''}${r.failed ? ` — ${r.failed}` : ''}`)
+      .map((r) => `- ${r.failed ? '<a:wrong:1550504971303395430>' : '<a:correct:1550504846199758928>'} **${r.payload.label}** (${mb(r.payload.size)} MB)${r.method === 'link' ? ' — download link sent (48 h)' : ''}${r.failed ? ` — ${r.failed}` : ''}`)
       .join('\n');
 
     const embed = results.every((r) => !r.failed)
@@ -256,7 +256,7 @@ async function runFilesBackup(interaction) {
             : undefined,
         })
       : warningEmbed({
-          title: results.some((r) => !r.failed) ? '⚠️ Backup partially delivered' : '❌ Backup failed',
+          title: results.some((r) => !r.failed) ? '⚠️ Backup partially delivered' : '<a:wrong:1550504971303395430> Backup failed',
           description: delivery,
         });
 

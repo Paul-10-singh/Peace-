@@ -129,7 +129,7 @@ module.exports = {
       return reply(interaction, {
         embeds: [
           commandEmbed({
-            title: `🎧 ${channel.name}`,
+            title: `<a:music:1550504904521678848> ${channel.name}`,
             description: lines.join('\n') || 'No members.',
             extra: `${human.length} user${human.length === 1 ? '' : 's'}${bots.length ? ` · ${bots.length} bot${bots.length === 1 ? '' : 's'}` : ''}`,
           }),
