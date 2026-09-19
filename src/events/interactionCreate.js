@@ -75,7 +75,7 @@ module.exports = {
       const { hasAccess } = require('../utils/permissions');
       const sub = interaction.options.getSubcommand(false);
       const command = getCommandForInteraction(registeredCommand, sub);
-      const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.user, interaction.guild, command.data.name, sub);
+      const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.member || interaction.user, interaction.guild, command.data.name, sub);
       if (!allowed) {
         return interaction.reply({ content: '<:cross:1534849320568750221> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
       }
@@ -104,7 +104,7 @@ module.exports = {
       if (!command) return;
 
       const { hasAccess } = require('../utils/permissions');
-      const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.user, interaction.guild, command.data.name, undefined);
+      const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.member || interaction.user, interaction.guild, command.data.name, undefined);
       if (!allowed) {
         return interaction.reply({ content: '<:cross:1534849320568750221> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
       }

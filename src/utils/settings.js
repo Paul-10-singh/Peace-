@@ -33,6 +33,7 @@ const DEFAULTS = {
   autorole: { roleId: null },
   tempvc: { channelId: null, rooms: {} },
   vc247: { channelId: null },
+  vcrole: { roleId: null },
   logs: {
     moderation: null,
     utility: null,

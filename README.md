@@ -36,6 +36,9 @@ All security features are **automatic**:
 ### 📊 Server stats
 `/stats setup` creates live member/bot counter channels that update automatically.
 
+**VC activity:** `/vc stats` is open to everyone. `/vc task`, `/vc custom_stats` and `/vc chart` are locked
+behind a role — set it once per server with `/vcrole set role:<role>` (owner only).
+
 ### 💬 Welcome & goodbye
 `/welcome set channel:#welcome message:"Welcome {user} to {server}!" role:@Member`
 `/goodbye set channel:#goodbye message:"Goodbye {user}!"`

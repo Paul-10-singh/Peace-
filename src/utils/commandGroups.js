@@ -14,14 +14,23 @@ const OWNER_MERGES = [
 
 const UTILITY_MERGES = ['all', 'ping', 'support'];
 
-function asSubcommand(command) {
+// VC activity commands live as separate files but are exposed ONLY as /vc
+// subcommands. map = { sourceCommandName: subcommandName }.
+const VC_MERGES = {
+  vcstats: 'stats',
+  vctask: 'task',
+  vcstats_custom: 'custom_stats',
+  vchart: 'chart',
+};
+
+function asSubcommand(command, name) {
   const data = command.data.toJSON();
   const options = data.options || [];
   if (options.some((option) => option.type === 1 || option.type === 2)) return null;
   return {
     type: 1,
-    name: data.name,
-    description: data.description || `Run ${data.name}`,
+    name: name || data.name,
+    description: data.description || `Run ${name || data.name}`,
     options,
   };
 }
@@ -34,7 +43,7 @@ function mergeInto(collection, groupName, names) {
   const subcommands = [];
   for (const name of names) {
     const command = collection.get(name);
-    const subcommand = command && asSubcommand(command);
+    const subcommand = command && asSubcommand(command, name);
     if (!command || !subcommand) continue;
     merged[name] = command;
     subcommands.push(subcommand);
@@ -52,9 +61,39 @@ function mergeInto(collection, groupName, names) {
   group.__mergedCommands = { ...(group.__mergedCommands || {}), ...merged };
 }
 
+// Like mergeInto but the exposed subcommand name differs from the source
+// command name (e.g. vcstats -> /vc stats). __mergedCommands is keyed by the
+// NEW subcommand name so getCommandForInteraction(..., sub) resolves it.
+function mergeRenamedInto(collection, groupName, renames) {
+  const group = collection.get(groupName);
+  if (!group) return;
+
+  const merged = {};
+  const subcommands = [];
+  for (const [sourceName, subName] of Object.entries(renames)) {
+    const command = collection.get(sourceName);
+    const subcommand = command && asSubcommand(command, subName);
+    if (!command || !subcommand) continue;
+    merged[subName] = command;
+    subcommands.push(subcommand);
+    collection.delete(sourceName);
+  }
+
+  if (!subcommands.length) return;
+  const originalData = group.data.toJSON();
+  const existingNames = new Set((originalData.options || []).map((option) => option.name));
+  const data = {
+    ...originalData,
+    options: [...(originalData.options || []), ...subcommands.filter((option) => !existingNames.has(option.name))],
+  };
+  group.data = { toJSON: () => data };
+  group.__mergedCommands = { ...(group.__mergedCommands || {}), ...merged };
+}
+
 function applyCommandGroups(collection) {
   mergeInto(collection, 'owner', OWNER_MERGES);
   mergeInto(collection, 'utility', UTILITY_MERGES);
+  mergeRenamedInto(collection, 'vc', VC_MERGES);
   return collection;
 }
 

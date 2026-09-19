@@ -5,9 +5,10 @@
  * Voice-channel activity tracker (ported from the Vybe ✘ build).
  *
  * Records how long each member spends in voice per guild per day, then powers:
- *   /vcstats         - weekly time + remaining hours to reach the goal
- *   /vcstats_custom  - same stats for a manual YYYY-MM-DD range
- *   /vchart          - server-wide weekly chart
+ *   /vc stats        - weekly time + remaining hours to reach the goal
+ *   /vc custom_stats - same stats for a manual YYYY-MM-DD range
+ *   /vc task         - leaderboard for all members holding a role
+ *   /vc chart        - server-wide weekly chart
  *   Sunday report    - automated DM chart to each guild owner
  *
  * Storage: SQLite (data/vc_tracker.db) when better-sqlite3 is installed,

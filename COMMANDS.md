@@ -21,7 +21,8 @@ All commands are slash (`/`) commands.
 
 `General`   :  /avatar /serverinfo /userinfo /roles /poll /remind /ping /support /help
 `Personal`  :  /note add/edit/list/remove /afk
-`Voice`     :  /stop /disconnect (warn if 24/7 mode is on)
+`Voice`     :  /vc stats /stop /disconnect (warn if 24/7 mode is on)
+`VC gated`  :  /vc task /vc custom_stats /vc chart (require a role set via /vcrole)
 
 # 🟡 Admin (owner/co-owner or whitelisted)
 
@@ -36,8 +37,7 @@ All commands are slash (`/`) commands.
 `24/7 voice`    : /247 on/end/status [channel] /vc247 set/off/status — bot stays in a VC around the clock & auto-rejoins on kick/move/disconnect
 `Tickets`       : /ticket setup/setlog/panel/close
 `Roles/emoji`   : /giverole /roleicon /stealemoji /rolemanage info/all/strip/inrole
-`Server config` : /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /stats setup/disable/status 
-/setlog /embed /announce /backup /leaveserver /serverlist
+`Server config` : /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /stats setup/disable/status /vcrole /setlog /embed /announce /backup /leaveserver /serverlist
 `Extras`        : /snipe /purgebots /picture user/server/icon
 `Security`      : /safety on/off/status /security on/off/action/threshold /whitelist add/remove /antilink * /antinuke on/off /scamdetect on/off /lockdown /ignore add/remove
 
@@ -164,10 +164,13 @@ One open ticket per user per category. @everyone denied; creator + staff role al
 /support	Support info/link
 /stop	Leave voice. While 24/7 mode is on → refuses with a warning (only /247 mode:end frees it)
 /disconnect	Leave voice. While 24/7 mode is on → refuses with a warning (only /247 mode:end frees it)
-/vcstats [member]	Weekly VC time + hours needed to reach the active goal
-/vcstats_custom start_date:<YYYY-MM-DD> end_date:<YYYY-MM-DD> [member]	VC time for a custom date period
-/vctask role:<role>	Weekly VC time for every member with a role (leaderboard)
-/vchart [period]	Server-wide weekly VC activity chart (this / last week)
+/vc stats [member]	Weekly VC time + hours needed to reach the active goal (open to **everyone**)
+/vc custom_stats start_date:<YYYY-MM-DD> end_date:<YYYY-MM-DD> [member]	VC time for a custom date period (requires the role set with /vcrole)
+/vc task role:<role>	Weekly VC time for every member with a role (leaderboard) (requires the role set with /vcrole)
+/vc chart [period]	Server-wide weekly VC activity chart (this / last week) (requires the role set with /vcrole)
+/vcrole set role:<role>	Give ONLY that role access to /vc task, /vc custom_stats and /vc chart (owner only; /vc stats stays open to everyone)
+/vcrole remove	Remove the role restriction → the three commands become owner-only until a role is set again
+/vcrole status	Show the current VC role restriction
 
 # 🛠 Owner tools (new)
 

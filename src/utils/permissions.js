@@ -12,9 +12,15 @@
  */
 const { isOwner } = require('./owners');
 const { isTrusted } = require('./whitelist');
-const { getList } = require('./settings');
+const { get, getList } = require('./settings');
 
 const TIERS = { EVERYONE: 1, ADMIN: 2, OWNER: 3, TRUSTED: 4 };
+
+// ------------- role-gated "everyone" commands -----------------------------
+// Still shown as EVERYONE tier (no Discord permission required) but only
+// members holding the per-guild role configured via /vcrole may run them.
+// Owner bypasses. /vc stats stays open to everyone.
+const VC_ROLE_LOCKED = new Set(['vctask', 'vcstats_custom', 'vchart']);
 
 // Commands fully available to everyone (all subcommands if any).
 const EVERYONE = new Set([
@@ -64,11 +70,15 @@ function getCommandTier(command, sub = null) {
   return TIERS.OWNER;
 }
 
-// user = { id } | interaction.user, guild = Guild | null (DMs have no whitelist)
+// user = { id } | interaction.member | message.member, guild = Guild | null
+// DMs have no whitelist/roles. `user` needs .id; role-gated checks need .roles.
 function hasAccess(user, guild, command, sub = null) {
-  const tier = getCommandTier(command, sub);
-  if (tier === TIERS.EVERYONE) return true;
   if (isOwner(user.id, guild?.id)) return true;
+  const tier = getCommandTier(command, sub);
+  if (tier === TIERS.EVERYONE) {
+    if (VC_ROLE_LOCKED.has(command)) return hasVcRole(user, guild);
+    return true;
+  }
   if (tier === TIERS.TRUSTED) {
     return !!(guild && isTrusted(user.id, guild.id));
   }
@@ -76,6 +86,14 @@ function hasAccess(user, guild, command, sub = null) {
     return getList(guild.id, 'security', 'whitelist').includes(user.id);
   }
   return false;
+}
+
+// True if the member holds the role configured via /vcrole (owner bypass handled above).
+function hasVcRole(user, guild) {
+  if (!guild) return false;
+  const required = get(guild.id, 'vcrole').roleId;
+  if (!required) return false;
+  return !!user?.roles?.cache?.has(required) || !!user?.roles?.has(required);
 }
 
 // True if the user can run at least one subcommand of an interactive command.

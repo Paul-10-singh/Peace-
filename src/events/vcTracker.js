@@ -3,7 +3,7 @@
  * Developed by Smith.Code
  *
  * Feeds every voice join / leave / move into the VC activity tracker so
- * /vcstats, /vcstats_custom, /vctask and /vchart stay current. Runs alongside
+ * /vc stats, /vc custom_stats, /vc task and /vc chart stay current. Runs alongside
  * the temp-VC handler (events/voiceStateUpdate.js).
  */
 const vcTracker = require('../utils/vcTracker');

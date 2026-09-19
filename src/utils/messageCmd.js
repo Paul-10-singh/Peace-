@@ -393,7 +393,7 @@ async function tryRunMessageCommand(client, message) {
   const resolved = resolveOptions(command, args, message);
   const allowedAccess = command.ownerOnly
     ? isOwner(message.author.id, message.guild?.id)
-    : hasAccess(message.author, message.guild, command.data.name, resolved.sub);
+    : hasAccess(message.member || message.author, message.guild, command.data.name, resolved.sub);
   if (!allowedAccess) {
     await message.channel
       .send({ content: "<:cross:1534849320568750221> You don't have permission to use this command." })
