@@ -62,6 +62,17 @@ module.exports = {
       await owner.send({ embeds: [embed], components }).catch(() => {
         // DMs may be closed — silently ignore
       });
+
+      // Also drop the welcome card into the server's system channel (or the
+      // first text channel we can post in), if any.
+      const channel =
+        fullGuild.systemChannel ||
+        fullGuild.channels.cache
+          .filter((c) => c.isTextBased() && c.permissionsFor(fullGuild.members.me)?.has('SendMessages'))
+          .first();
+      if (channel) {
+        await channel.send({ embeds: [embed], components }).catch(() => {});
+      }
     },
 
     // ── Bot removed from a server ─────────────────────────────────────────

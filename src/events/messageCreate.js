@@ -2,6 +2,7 @@
  * Peace✘ - Discord Bot
  * Developed by Smith.Code
  */
+const { EmbedBuilder } = require('discord.js');
 const { get } = require('../utils/settings');
 const { checkMessage, punish } = require('../utils/security');
 const { getAfk, isAfk, clearAfk } = require('../utils/afk');
@@ -107,6 +108,33 @@ module.exports = {
           .send({ content: `<a:butterfly:1550512700327600342> **${message.author.username}**, you sent a message so your AFK has ended.` })
           .catch(() => {});
       }
+    }
+
+    // --- "You were pinged" DM notification ---
+    // DM every non-bot user who was mentioned (excluding the message author).
+    try {
+      const mentioned = [...message.mentions.users.values()].filter(
+        (u) => !u.bot && u.id !== message.author.id
+      );
+      if (mentioned.length) {
+        for (const target of mentioned) {
+          const embed = new EmbedBuilder()
+            .setColor(0xFFA500)
+            .setTitle('<a:warning:1550504965955653723> You were pinged!')
+            .addFields(
+              { name: 'Sender', value: `${message.author} (${message.author.id})` },
+              { name: 'Server', value: message.guild.name },
+              { name: 'Channel', value: `${message.channel}` },
+              { name: 'Message Link', value: `[Jump to Message](${message.url})` },
+              { name: 'Message Content', value: message.content.slice(0, 1000) || '*No text content*' }
+            )
+            .setTimestamp();
+
+          await target.send({ embeds: [embed] }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      // Best-effort DM notifications — never crash on any failure
     }
 
 
