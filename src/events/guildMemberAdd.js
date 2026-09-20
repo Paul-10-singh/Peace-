@@ -7,73 +7,73 @@ const { updateStats } = require('../utils/stats');
 const { sendLog } = require('../utils/logging');
 const { getCachedInvites, setCachedInvites } = require('../utils/inviteCache');
 
-// guildId -> recent join timestamps (used by anti-raid flood detection)
-const raidJoins = new Map();
-
-// Anti-raid trigger: lock every text channel for 10 minutes, then auto-unlock.
-async function lockTextChannels(client, guild) {
-  let locked = 0;
-  for (const channel of guild.channels.cache.values()) {
-    if (channel.isTextBased()) {
-      await channel.permissionOverwrites
-        .edit(guild.id, { SendMessages: false }, { reason: 'Peace✘ anti-raid lockdown' })
-        .catch(() => {});
-      locked += 1;
-    }
-  }
-  const { errorEmbed } = require('../utils/decorations');
-  const embed = errorEmbed({
-    title: '🚨 ANTI-RAID',
-    description: `Join flood detected — **${locked}** text channel(s) locked for 10 minutes.`,
-  });
-  await sendLog(client, guild.id, 'security', { embeds: [embed] }).catch(() => {});
-  setTimeout(async () => {
-    for (const channel of guild.channels.cache.values()) {
-      if (channel.isTextBased()) {
-        await channel.permissionOverwrites
-          .edit(guild.id, { SendMessages: null }, { reason: 'Peace✘ anti-raid lockdown lifted' })
-          .catch(() => {});
-      }
-    }
-  }, 10 * 60 * 1000);
-}
+// ── Anti-raid handled by the security platform (Layer 5 fingerprinting +
+//    Layer 7 playbooks) — see src/security/gateway.onMemberJoin. ────────────
 
 module.exports = {
   name: 'guildMemberAdd',
   async execute(client, member) {
-    const { successEmbed } = require('../utils/decorations');
+    const { successEmbed, errorEmbed } = require('../utils/decorations');
     const guild = member.guild;
     const config = get(guild.id, 'welcome');
 
-    // ── Anti-bot: kick unauthorized bot additions ─────────────────────
-    if (member.user.bot) {
-      const sec = get(guild.id, 'security');
-      if (sec.antiBot?.enabled) {
-        const { isOwner } = require('../utils/owners');
-        const bypass = isOwner(member.id, guild.id) || (sec.whitelist || []).includes(member.id);
-        if (!bypass) {
-          await member.kick('Peace✘ anti-bot: unauthorized bot addition').catch(() => {});
-          const { errorEmbed } = require('../utils/decorations');
-          const botEmbed = errorEmbed({
-            title: '🤖 Anti-Bot',
-            description: `**${member.user.tag}** was kicked automatically (bot additions are not allowed).`,
-          });
-          await sendLog(client, guild.id, 'security', { embeds: [botEmbed] }).catch(() => {});
+    // ── resolve the invite that was used (needed by anti-raid ctx) ────────
+    const oldInvites = getCachedInvites(guild.id);
+    const fetchedInvites = await guild.invites.fetch().catch(() => null);
+    let usedInvite = null;
+    const newInvites = new Map();
+
+    if (fetchedInvites) {
+      for (const invite of fetchedInvites.values()) {
+        const uses = invite.uses || 0;
+        newInvites.set(invite.code, uses);
+        if (!usedInvite && uses > (oldInvites.get(invite.code) || 0)) {
+          usedInvite = invite;
+        }
+      }
+    }
+    if (newInvites.size) setCachedInvites(guild.id, newInvites);
+
+    // ── Security platform: anti-bot + anti-raid (zero-trust engine) ──────
+    const security = client.security;
+    if (security?.engine) {
+      const gateway = require('../security/gateway');
+
+      if (member.user.bot) {
+        const sec = get(guild.id, 'security');
+        if (sec.antiBot?.enabled) {
+          const { isOwner } = require('../utils/owners');
+          const bypass = isOwner(member.id, guild.id) || (sec.whitelist || []).includes(member.id);
+          if (!bypass) {
+            await member.kick('Peace✘ anti-bot: unauthorized bot addition').catch(() => {});
+            const { errorEmbed: red } = require('../utils/decorations');
+            const botEmbed = red({
+              title: '🤖 Anti-Bot',
+              description: `**${member.user.tag}** was kicked automatically (bot additions are not allowed).`,
+            });
+            await sendLog(client, guild.id, 'security', { embeds: [botEmbed] }).catch(() => {});
+          }
+        }
+      } else {
+        const raid = await gateway.onMemberJoin(client, member, { usedInvite });
+        if (raid.escalated) {
+          return;
         }
       }
     }
 
-    // ── Anti-raid: detect sudden join floods and lock the server ──────
-    const sec = get(guild.id, 'security');
-    if (sec.antiRaid?.enabled) {
-      const now = Date.now();
-      const windowMs = sec.antiRaid.windowMs || 10000;
-      const list = (raidJoins.get(guild.id) || []).filter((t) => now - t < windowMs);
-      list.push(now);
-      raidJoins.set(guild.id, list);
-      if (list.length >= (sec.antiRaid.maxJoins || 8)) {
-        raidJoins.delete(guild.id);
-        await lockTextChannels(client, guild);
+    // Legacy anti-raid fallback when the platform is not bootstrapped.
+    if (member.user.bot === false && !security) {
+      const sec = get(guild.id, 'security');
+      if (sec.antiRaid?.enabled) {
+        const now = Date.now();
+        const windowMs = sec.antiRaid.windowMs || 10000;
+        const list = (raidFallback.get(guild.id) || []).filter((ts) => now - ts < windowMs);
+        list.push(now);
+        raidFallback.set(guild.id, list);
+        if (list.length >= (sec.antiRaid.maxJoins || 8)) {
+          raidFallback.delete(guild.id);
+        }
       }
     }
 
@@ -133,25 +133,6 @@ module.exports = {
       }
     }
 
-    const oldInvites = getCachedInvites(guild.id);
-    const fetchedInvites = await guild.invites.fetch().catch(() => null);
-    let usedInvite = null;
-    const newInvites = new Map();
-
-    if (fetchedInvites) {
-      for (const invite of fetchedInvites.values()) {
-        const uses = invite.uses || 0;
-        newInvites.set(invite.code, uses);
-        if (!usedInvite && uses > (oldInvites.get(invite.code) || 0)) {
-          usedInvite = invite;
-        }
-      }
-    }
-
-    if (newInvites.size) {
-      setCachedInvites(guild.id, newInvites);
-    }
-
     const inviteEmbed = successEmbed({
       title: 'Member Joined',
       description: `${member.user.username} (<@${member.id}>) joined the server.`,
@@ -166,3 +147,6 @@ module.exports = {
     await updateStats(client, guild);
   },
 };
+
+// Last-resort in-memory flood stub used only if the platform is not installed.
+const raidFallback = new Map();

@@ -1,0 +1,25 @@
+# PeaceX - Security Playbook
+# Developed by Smith.Code
+#
+# Scam / phishing playbook — message analysis flagged a scam. Punishes the
+# poster, escalates to admins, records the content hash for the fed feeds.
+id: scam
+name: Scam Response
+description: Handle a confirmed phishing/scam message and its author.
+on:
+  - message.scam
+  - message.phish
+steps:
+  - name: delete_message
+    critical: true
+    description: Remove the offending message from the channel.
+  - name: punish_actor
+    critical: true
+    params: { punishment: "#punishment" }
+    description: Warn/timeout/kick the author per guild policy.
+  - name: record_offense_hash
+    description: Push the normalized content hash into the sender-reputation DB.
+  - name: notify_admins
+    description: Ping staff with the scam report.
+  - name: warn_user
+    description: DM the offender with the reason (best-effort).

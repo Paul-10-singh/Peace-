@@ -9,7 +9,11 @@
     "deploy": "node scripts/deploy.js",
     "deploy:guild": "node scripts/guild-sync.js",
     "deploy:guilds": "node scripts/deploy.js --guild-only",
-    "deploy:global": "node scripts/deploy.js --pure-global"
+    "deploy:global": "node scripts/deploy.js --pure-global",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "audit:deps": "npm audit"
   },
   "type": "commonjs",
   "engines": {
@@ -21,13 +25,21 @@
     "@discordjs/voice": "^0.19.2",
     "adm-zip": "^0.6.0",
     "better-sqlite3": "^13.0.3",
+    "bloom-filters": "^3.0.4",
     "discord.js": "^14.15.3",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "ioredis": "^6.0.0",
+    "js-yaml": "^5.4.2",
+    "pino": "^10.3.1"
   },
   "allowScripts": {
     "protobufjs@7.6.5": true,
     "canvas@3.2.3": true,
     "esbuild@0.27.7": true,
     "better-sqlite3@13.0.3": true
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
+    "vitest": "^2.1.9"
   }
 }

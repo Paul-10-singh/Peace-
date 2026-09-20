@@ -143,6 +143,11 @@ module.exports = {
     }
 
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('incident:')) {
+        const { handleButton } = require('../security/playbooks/runner');
+        await handleButton(interaction, client);
+        return;
+      }
       if (interaction.customId.startsWith('sec:')) {
         const { handleComponent } = require('../utils/securityPanel');
         await handleComponent(interaction);

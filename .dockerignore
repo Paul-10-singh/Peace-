@@ -1,0 +1,15 @@
+node_modules
+data
+logs
+coverage
+.git
+*.log
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose.yml
+deploy
+.github
+test
+vitest.config.mjs

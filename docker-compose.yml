@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  peacex:
+    build: .
+    image: peacex-bot:latest
+    container_name: peacex-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # security platform (all optional — sane defaults are self-provisioned)
+      SECURITY_DB_PATH: /opt/peacex/data/security.db
+      SECURITY_MIRROR_DIR: /opt/peacex/data/mirror
+      SECURITY_METRICS_PORT: "9090"
+    ports:
+      - "127.0.0.1:9090:9090"   # observability: bind loopback only
+    volumes:
+      - peacex-data:/opt/peacex/data
+      - peacex-logs:/opt/peacex/logs
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=deploy/seccomp.json
+    mem_limit: 512m
+    pids_limit: 256
+    oom_score_adj: 200
+    stop_grace_period: 15s
+    init: true
+
+volumes:
+  peacex-data:
+  peacex-logs:

@@ -1,0 +1,29 @@
+# PeaceX - Security Playbook
+# Developed by Smith.Code
+#
+# Mass-ban / account-takeover playbook — triggered when a sudden burst of
+# bans with a single actor is detected (nuking the member-list).
+id: massban
+name: Mass-Ban Response
+description: Stop an actor from purging the member list via rapid bans.
+on:
+  - ban.burst
+steps:
+  - name: snapshot_permissions
+    critical: true
+  - name: strip_roles
+    critical: true
+  - name: punish_actor
+    critical: true
+    params: { punishment: "ban" }
+  - name: freeze_bans
+    critical: true
+    description: Rate-limit the ban route for the guild (429-safe queue).
+  - name: lock_channels
+    critical: true
+  - name: notify_admins
+    description: Ping staff with victim count + actor summary.
+  - name: create_incident_channel
+    description: Private #incident-<id> channel.
+  - name: enable_paranoid_mode
+    description: Elevate sensitivity for 30 minutes.

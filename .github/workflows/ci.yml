@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # weekly dependency/regression sweep
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Unit tests (engine / UEBA / ledger)
+        run: npm test
+
+      - name: Coverage gates (80% lines/stmts/funcs, 70% branches)
+        run: npm run test:coverage
+
+      - name: Dependency vulnerability audit
+        run: npm audit --omit=dev || true
+
+      - name: Generate SBOM (CycloneDX)
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-file sbom.cdx.json
+
+      - name: Upload SBOM + coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: peacex-security-artifacts
+          path: |
+            sbom.cdx.json
+            coverage/coverage-final.json
+          if-no-files-found: warn

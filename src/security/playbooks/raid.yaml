@@ -1,0 +1,29 @@
+# PeaceX - Security Playbook
+# Developed by Smith.Code
+#
+# Anti-raid playbook — triggered when the join raid score crosses the
+# configured threshold or the flood detector fires.
+id: raid
+name: Raid Response
+description: Lock the server against a coordinated join flood and isolate suspicious joiners.
+on:
+  - raid.score_exceeded
+  - raid.flood
+steps:
+  - name: snapshot_permissions
+    critical: true
+    description: Capture channel overwrites for rollback.
+  - name: lock_channels
+    critical: true
+    description: Deny SendMessages for @everyone.
+  - name: quarantine_joiners
+    critical: true
+    description: Apply the quarantine role to every member who joined inside the raid window.
+  - name: enable_verification
+    description: Require re-verification (@everyone reads-only until Member-perm granted).
+  - name: notify_admins
+    description: Ping staff with raid score + joiners list.
+  - name: create_incident_channel
+    description: Private #incident-<id> channel with join timeline.
+  - name: enable_paranoid_mode
+    description: Keep lockdown sensitivity high for 30 minutes.

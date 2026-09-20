@@ -3,24 +3,10 @@
  * Developed by Smith.Code
  */
 const { EmbedBuilder } = require('discord.js');
-const { get } = require('../utils/settings');
-const { checkMessage, punish } = require('../utils/security');
 const { getAfk, isAfk, clearAfk } = require('../utils/afk');
 const { tryRunMessageCommand } = require('../utils/messageCmd');
 
-const spamBuckets = new Map(); // guildId -> Map(userId -> timestamps[])
 const protectedSayMessages = new Map(); // channelId -> lower-case message text counts
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [guildId, users] of spamBuckets) {
-    for (const [userId, stamps] of users) {
-      const fresh = stamps.filter((t) => now - t < 10000);
-      if (fresh.length === 0) users.delete(userId);
-    }
-    if (users.size === 0) spamBuckets.delete(guildId);
-  }
-}, 30000);
 
 module.exports = {
   name: 'messageCreate',
@@ -138,37 +124,11 @@ module.exports = {
     }
 
 
-    const config = get(message.guild.id, 'security');
-    if (!config.enabled) return;
-
-    // Ignore listed channels from auto-moderation
-    if ((config.ignoredChannels || []).includes(message.channel.id)) return;
-
-    // Whitelisted (trusted) users bypass everything
-    if ((config.whitelist || []).includes(message.author.id)) return;
-
-    // Members with Manage Messages are considered staff; still moderate others
-    if (message.member?.permissions.has('ManageMessages')) return;
-
-    // 1. Scam links + anti-link (blocked words are handled by the
-    //    escalating profanity system - see events/profanity.js)
-    const check = checkMessage(message, config);
-    if (check.hit) {
-      return punish(client, message, config, check.reason);
-    }
-
-    // 2. Anti-spam
-    if (config.antiSpam?.enabled) {
-      if (!spamBuckets.has(message.guild.id)) spamBuckets.set(message.guild.id, new Map());
-      const users = spamBuckets.get(message.guild.id);
-      const stamps = users.get(message.author.id) || [];
-      stamps.push(Date.now());
-      users.set(message.author.id, stamps.filter((t) => Date.now() - t < (config.antiSpam.intervalMs || 5000)));
-
-      if (stamps.length >= (config.antiSpam.maxMessages || 5)) {
-        users.delete(message.author.id);
-        return punish(client, message, config, 'spamming');
-      }
-    }
+    // --- Security platform (zero-trust + behavior + content analysis) ---
+    // All auto-moderation — scam/anti-link/anti-word/anti-spam and the
+    // Layer 3 content pipeline — now flows through the gateway so every
+    // sample lands in the ledger + behavior baseline.
+    const { onMessage } = require('../security/gateway');
+    await onMessage(client, message);
   },
 };

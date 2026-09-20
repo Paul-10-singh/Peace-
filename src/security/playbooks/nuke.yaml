@@ -1,0 +1,43 @@
+# PeaceX - Security Playbook
+# Developed by Smith.Code
+#
+# Anti-nuke playbook — instant neutralization of an unauthorized destructive
+# audit-log action. Steps are executed in order by src/security/playbooks/
+# runner.js and are resumable (progress is persisted per step).
+id: nuke
+name: Anti-Nuke Response
+description: Neutralize an unauthorized destructive action, lock the server, open an incident channel.
+on:
+  - channel.create
+  - channel.delete
+  - channel.update
+  - role.create
+  - role.delete
+  - role.grant
+  - guild.update
+  - webhook.manage
+  - emoji.manage
+  - ban
+  - kick
+  - bot.add
+  - mention.everyone
+steps:
+  - name: snapshot_permissions
+    critical: true
+    description: Capture every channel overwrite so rollback can restore the pre-incident state.
+  - name: strip_roles
+    critical: true
+    description: Snapshot + remove the actor's non-managed roles.
+  - name: punish_actor
+    critical: true
+    params: { punishment: "#punishment" }
+    description: Apply the configured punishment (ban/kick/timeout) to the actor.
+  - name: lock_channels
+    critical: true
+    description: Deny SendMessages for @everyone in every text channel.
+  - name: notify_admins
+    description: Ping staff with the incident summary + one-click undo button.
+  - name: create_incident_channel
+    description: Create a private #incident-<id> channel with the timeline and undo actions.
+  - name: enable_paranoid_mode
+    description: Raise raid sensitivity + shorten grant TTLs for 30 minutes.

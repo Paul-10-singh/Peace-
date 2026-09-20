@@ -5,3 +5,4 @@ cookies.txt
 *.log
 data/
 .data/
+coverage/

@@ -50,6 +50,10 @@ module.exports = {
       set(guildId, 'security', sec);
       set(guildId, 'profanity', pro);
 
+      // The /safety master switch also arms/disarms the ten-layer platform.
+      if (interaction.client.security?.disableAll && !enable) interaction.client.security.disableAll();
+      if (interaction.client.security?.engine && enable) interaction.client.security.engine.enable();
+
       return reply(interaction, {
         embeds: [enable
           ? successEmbed({

@@ -64,6 +64,11 @@ fs.readdirSync(eventsDir).forEach((file) => {
 const { applyCommandGroups } = require('./utils/commandGroups');
 applyCommandGroups(client.commands);
 
+// Security platform (2026): ten layers wired into client.security.
+const { bootstrap: bootstrapSecurity, shutdown } = require('./security/bootstrap');
+bootstrapSecurity(client);
+process.once('SIGINT', () => { try { shutdown(); } catch {} process.exit(0); });
+
 // NOTE: Command registration does NOT happen here. Startup only connects to
 // the gateway. Registration lives in exactly ONE place: scripts/deploy.js
 // (run with `npm run deploy`). Never add registration calls here — mixing
