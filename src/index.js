@@ -7,6 +7,7 @@ const { Client, Collection, GatewayIntentBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { ANSI } = require('./utils/decorations');
+const { logger } = require('./security/log');
 
 const client = new Client({
   intents: [
@@ -26,10 +27,14 @@ client.commands = new Collection();
 // Safety net: a single failed API call / reply must never crash the bot.
 client.on('error', (err) => console.error(`${ANSI.red}[PeaceX] [×] Client error: ${err.message}${ANSI.reset}`));
 process.on('unhandledRejection', (reason) => {
-  console.error(`${ANSI.red}[PeaceX] [×] Unhandled rejection:${ANSI.reset}`, reason);
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.error({ err: err.message, stack: err.stack }, 'unhandledRejection');
 });
 process.on('uncaughtException', (err) => {
-  console.error(`${ANSI.red}[PeaceX] [×] Uncaught exception:${ANSI.reset}`, err);
+  logger.fatal({ err: err.message, stack: err.stack }, 'uncaughtException');
+  // best-effort teardown, then a hard exit — never continue in a corrupt state
+  try { require('./security/bootstrap').shutdown(); } catch { /* ignore */ }
+  setImmediate(() => process.exit(1));
 });
 
 // Load commands from commands/**/*.js

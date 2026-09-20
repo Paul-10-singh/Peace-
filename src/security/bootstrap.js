@@ -40,18 +40,11 @@ const nexusRep = require('./nexus/reputation');
 const metrics = require('./observability/metrics');
 const health = require('./observability/health');
 const secrets = require('./secrets');
+const scheduler = require('./scheduler');
 const { logger, withTrace } = require('./log');
 
 let started = false;
-let timers = [];
 let activeClient = null;
-
-function schedule(fn, ms, label) {
-  const t = setInterval(fn, ms);
-  if (t.unref) t.unref();
-  timers.push({ t, label });
-  logger.info({ label, everyMs: ms }, 'scheduler:registered');
-}
 
 /**
  * Bootstrap all ten layers onto `client`. Idempotent.
@@ -61,6 +54,7 @@ function bootstrap(client) {
   if (started) return client.security;
   started = true;
   activeClient = client;
+  scheduler.bindClient(client);
 
   secrets.load();
   const ANOMALY = process.env.SECURITY_ANOMALY === '1';
@@ -97,6 +91,7 @@ function bootstrap(client) {
     health,
     db,
     secrets,
+    scheduler,
     logger,
     disableAll,
     enableAll,
@@ -106,7 +101,8 @@ function bootstrap(client) {
   };
 
   // ── scheduled jobs ──────────────────────────────────────────────────────
-  schedule(() => {
+  scheduler.register('grant-sweep', 10 * 60 * 1000, (c) => {
+    if (!engine?.sweep) return;
     const revoked = engine.sweep();
     if (revoked?.length) {
       registry.grantSweeps(revoked.length, { reason: 'ttl-or-inactive' });
@@ -114,13 +110,21 @@ function bootstrap(client) {
         try { chain.append(row.guild_id, null, 'capability.revoke', row.principal, { reason: 'ttl-or-inactive', action: row.action }); } catch { /* ignore */ }
       }
     }
-  }, 10 * 60 * 1000, 'grant-sweep');
+  });
 
-  schedule(() => feeds.syncAll().catch(() => {}), 6 * 60 * 60 * 1000, 'intel-feeds');
+  scheduler.register('intel-feeds', 6 * 60 * 60 * 1000, (c) => {
+    if (typeof feeds?.syncAll !== 'function') return;
+    feeds.syncAll().catch(() => {});
+  });
   feeds.syncAll().catch(() => {});
 
-  schedule(() => { try { merkle.buildDailyRoot(); } catch {} }, 15 * 60 * 1000, 'merkle-root');
-  schedule(() => nexus.gossip().catch(() => {}), 5 * 60 * 1000, 'nexus-gossip');
+  scheduler.register('merkle-root', 15 * 60 * 1000, (c) => {
+    try { if (merkle?.buildDailyRoot) merkle.buildDailyRoot(); } catch { /* ignore */ }
+  });
+  scheduler.register('nexus-gossip', 5 * 60 * 1000, (c) => {
+    if (typeof nexus?.gossip !== 'function') return;
+    nexus.gossip().catch(() => {});
+  });
 
   // resume interrupted incidents from a previous crash / restart
   client.once('ready', () => {
@@ -135,14 +139,14 @@ function bootstrap(client) {
   client.security._httpServer = server;
   logger.info({ port: process.env.SECURITY_METRICS_PORT || 9090 }, 'observability:listening');
 
-  // alert debouncer loop
-  schedule(async () => {
-    const lat = metrics.registry.punishLatency.values;
-    const maxLatency = Math.max(...[...lat.values()].map((v) => v.sum / Math.max(1, v.count)), 0);
-    const raidG = metrics.registry.raidScore.values;
-    const maxRaid = Math.max(...[...raidG.values()].map((v) => v.value), 0);
-    await metrics.checkAlerts({ punishmentLatencyMs: maxLatency, raidScore: maxRaid });
-  }, 60_000, 'alert-rules');
+  // alert debouncer loop (reads metric state exposed via registry.<metric>.values)
+  scheduler.register('alert-rules', 60_000, (c) => {
+    const lat = registry.punishLatency?.values;
+    const maxLatency = lat?.size ? Math.max(...[...lat.values()].map((v) => v.sum / Math.max(1, v.count)), 0) : 0;
+    const raidG = registry.raidScore?.values;
+    const maxRaid = raidG?.size ? Math.max(...[...raidG.values()].map((v) => v.value), 0) : 0;
+    return metrics.checkAlerts({ punishmentLatencyMs: maxLatency, raidScore: maxRaid });
+  });
 
   return client.security;
 }
@@ -159,6 +163,7 @@ function disableAll() {
     () => ratelimit.disable(),
     () => fingerprint.disable(),
     () => nexus.disable(),
+    () => scheduler.disable(),
   ];
   for (const fn of list) { try { fn(); } catch {} }
   if (sec) sec.enabled = false;
@@ -169,11 +174,14 @@ function enableAll() {
   if (!sec) return;
   sec.enabled = true;
   sec.engine.enable();
+  scheduler.enable();
 }
 
 function shutdown() {
-  for (const { t } of timers) clearInterval(t);
+  scheduler.stopAllSchedulers();
+  scheduler.unbindClient();
   if (activeClient?.security?._httpServer) activeClient.security._httpServer.close();
+  activeClient = null;
 }
 
 module.exports = { bootstrap, shutdown, disableAll, enableAll };

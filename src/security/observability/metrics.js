@@ -23,33 +23,46 @@ let alertsUrl = process.env.SECURITY_ALERT_WEBHOOK || null;
 let lastPing = 0;
 
 function counter(name, help) {
-  counters.set(name, { name, help, values: new Map() });
-  return (amount = 1, labels = {}) => {
+  const meta = { name, help, values: new Map() };
+  counters.set(name, meta);
+  const rec = (amount = 1, labels = {}) => {
     const k = labelKey(labels);
-    const cur = counters.get(name).values;
+    const cur = meta.values;
     cur.set(k, { labels, value: (cur.get(k)?.value || 0) + amount });
+    return rec;
   };
+  rec.values = meta.values; // expose state so callers can read/aggregate
+  rec.meta = meta;
+  return rec;
 }
 
 function gauge(name, help) {
-  gauges.set(name, { name, help, values: new Map() });
-  return (value, labels = {}) => {
-    if (typeof value !== 'number') return;
-    const cur = gauges.get(name).values;
-    cur.set(labelKey(labels), { labels, value });
+  const meta = { name, help, values: new Map() };
+  gauges.set(name, meta);
+  const rec = (value, labels = {}) => {
+    if (typeof value !== 'number') return rec;
+    meta.values.set(labelKey(labels), { labels, value });
+    return rec;
   };
+  rec.values = meta.values;
+  rec.meta = meta;
+  return rec;
 }
 
 function histogram(name, help, buckets = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]) {
-  histograms.set(name, { name, help, buckets, values: new Map() });
-  return (value, labels = {}) => {
-    const cur = histograms.get(name).values;
+  const meta = { name, help, buckets, values: new Map() };
+  histograms.set(name, meta);
+  const rec = (value, labels = {}) => {
     const k = labelKey(labels);
-    const acc = cur.get(k) || { labels, sum: 0, count: 0, b: {} };
+    const acc = meta.values.get(k) || { labels, sum: 0, count: 0, b: {} };
     acc.sum += value; acc.count += 1;
     for (const b of buckets) acc.b[b] = (acc.b[b] || 0) + (value <= b ? 1 : 0);
-    cur.set(k, acc);
+    meta.values.set(k, acc);
+    return rec;
   };
+  rec.values = meta.values;
+  rec.meta = meta;
+  return rec;
 }
 
 function labelKey(labels) {

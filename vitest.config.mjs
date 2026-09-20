@@ -8,6 +8,7 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/security/engine.js',
+        'src/security/scheduler.js',
         'src/security/behavior/baseline.js',
         'src/security/behavior/anomalies.js',
         'src/security/ledger/chain.js',
