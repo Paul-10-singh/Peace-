@@ -81,7 +81,7 @@ process.once('SIGINT', () => { try { shutdown(); } catch {} process.exit(0); });
 const { printStartupBanner } = require('./utils/decorations');
 
 client.once('clientReady', () => {
-  printStartupBanner({ tag: client.user.tag, commandCount: '—', status: 'Online' });
+  printStartupBanner({ tag: client.user.tag, commandCount: String(client.commands.size), status: 'Online' });
   console.log(`${ANSI.dim}[PeaceX] Ready. Commands are registered via "npm run deploy" (scripts/deploy.js).${ANSI.reset}`);
 });
 
