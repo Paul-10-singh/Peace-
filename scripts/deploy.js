@@ -38,18 +38,30 @@ const CAMP_GUILDS = [
 
 const GUILD_ONLY = process.argv.includes('--guild-only');
 
-for (const line of fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8').split(/\r?\n/)) {
-  const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-  if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+const envFile = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envFile)) {
+  for (const line of fs.readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} else {
+  // No local .env (e.g. Bot-Hosting daemon injects env via startup config) —
+  // trust process.env (DISCORD_TOKEN, CLIENT_ID) as-is.
+  console.log('[deploy] No .env found — using daemon-injected environment variables.');
 }
 
 async function main() {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   const commands = loadCommands();
-  const appId = process.env.CLIENT_ID;
-  if (!appId) throw new Error('CLIENT_ID not set in .env');
+  const resolveAppId = async () => {
+    if (process.env.CLIENT_ID) return process.env.CLIENT_ID;
+    const app = await rest.get('/oauth2/applications/@me');
+    console.log(`[deploy] No CLIENT_ID env var — resolved application id from token: ${app.id}`);
+    return app.id;
+  };
 
   console.log(`[deploy] Loading ${commands.length} commands from src/commands/...`);
+  const resolvedAppId = await resolveAppId();
 
   if (commands.length > 100) {
     throw new Error(
@@ -69,11 +81,11 @@ async function main() {
   }
 
   // ── Step 1: GLOBAL (single scope) ─────────────────────────────────────
-  const putResult = await rest.put(Routes.applicationCommands(appId), { body: commands });
+  const putResult = await rest.put(Routes.applicationCommands(resolvedAppId), { body: commands });
   console.log(`[deploy] ➜ GLOBAL -> ${putResult.length} commands stored.`);
 
   // ── Step 2: VERIFY global ─────────────────────────────────────────────
-  const stored = await rest.get(Routes.applicationCommands(appId));
+  const stored = await rest.get(Routes.applicationCommands(resolvedAppId));
   const names = stored.map((c) => c.name);
   const dupes = names.filter((n, i) => names.indexOf(n) !== i);
 
@@ -97,15 +109,15 @@ async function main() {
   let guildClean = true;
 
   for (const guild of guilds) {
-    const guildCommands = await rest.get(Routes.applicationGuildCommands(appId, guild.id));
+    const guildCommands = await rest.get(Routes.applicationGuildCommands(resolvedAppId, guild.id));
     if (guildCommands.length) {
-      await rest.put(Routes.applicationGuildCommands(appId, guild.id), { body: [] });
+      await rest.put(Routes.applicationGuildCommands(resolvedAppId, guild.id), { body: [] });
       console.warn(
         `[deploy] ⚠ Found ${guildCommands.length} stale guild-scoped command(s) in guild ` +
           `${guild.name} (${guild.id}) — wiped to enforce the single-scope policy.`
       );
     }
-    const recheck = await rest.get(Routes.applicationGuildCommands(appId, guild.id));
+    const recheck = await rest.get(Routes.applicationGuildCommands(resolvedAppId, guild.id));
     if (recheck.length) {
       guildClean = false;
       console.error(`[deploy] ✘ Guild ${guild.id} still reports ${recheck.length} commands after wipe.`);
