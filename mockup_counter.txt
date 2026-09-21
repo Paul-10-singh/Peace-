@@ -1,0 +1,360 @@
+═══════════════════════════════════════════════════════════════════════
+ PEACE✘ COUNTER MODULE v1.0 "COUNTER" — UI MOCKUPS · v1
+ Developed by Smith.Code · for approval BEFORE any code is written
+ Revision v1: initial review mockup — covers every panel, state, and
+              embed referenced by the /counter spec.
+═══════════════════════════════════════════════════════════════════════
+
+CHANGE SUMMARY (this revision · initial)
+────────────────────────────────────────────────────────────────────────
+ (initial mockup — no prior revision to diff against)
+
+GLOBAL RULES (every embed obeys these)
+────────────────────────────────────────────────────────────────────────
+• Color accents (Discord) — set per embed variant:
+    ACTIVE   #2B2D31 (embed bg)  success #57F287 (green)
+    RUIN/ERR #ED4245 (red)       info    #5865F2 (blurple)
+    milestone #FFD700 (gold)      neutral #2B2D31 (dark)
+• Every embed: title starts with an emoji, ends with a footer
+  "Peace✘ Counter · <relative timestamp>".
+• Members always <@id> mentions (never raw IDs) — uncached members are
+  fetched via members.fetch() before display.
+• Every command defers then edits → no freezes.
+• Buttons customId: counter:<area>:<action>:<ctx>
+  (e.g. counter:panel:enable, counter:channel:reset:<gid>:<chid>)
+• SelectMenus customId: counter:<area>:select:<ctx>
+• ChannelSelectMenu customId: counter:<area>:channel:<ctx>
+• Modals customId: counter:<area>:modal:<ctx>
+• EVERY panel/confirm interaction reply is EPHEMERAL (only the invoker
+  sees it). The ONLY visible messages are the ✅/❌ success & RUIN posts
+  the bot slams into the counting channel itself.
+
+─── EMOJI RULES (identical policy to VC/ToD modules) ───────────────
+• Never hardcode emojis in commands — always import from emojis.js
+  (src/utils/counter/emojis.js). Custom emoji IDs come from the central
+  emojis registry (src/utils/shared/emojis.js) reusing the VC/ToD set
+  where semantics overlap (correct ✅ / wrong ❌ / resets / history /
+  check / refresh). No invented IDs, no new uploads.
+• React/UI build uses the bot's stored customs whenever a default
+  glyph has an equivalent; pure-Unicode defaults stay spelled out so
+  review sees the exact glyph.
+
+═══════════════════════════════════════════════════════════════════════
+ 1. /counter — MAIN PANEL (ephemeral)
+═══════════════════════════════════════════════════════════════════════
+  ┌─ Counter Configuration — Peace✘ ──────────────────────────┐
+  │ 🎮 Counter Panel                                          │
+  │                                                            │
+  │ Status: 🟢 Enabled · 3 channels                            │
+  │ Mode: Numbers and arithmetic                              │
+  │                                                           │
+  │ ── Leaderboard ──                                          │
+  │ 🥇 <@userA> — 312                                          │
+  │ 🥈 <@userB> — 204                                          │
+  │ 🥉 <@userC> — 98                                           │
+  │                                                           │
+  │ ── Current Streak ──                                       │
+  │ 47 (best: 312) · resets today: 2                          │
+  │                                                           │
+  │ ── Recent Activity ──                                      │
+  │ Next number: 48 in #counting                              │
+  │ Last count: <@userA> (2m ago)                             │
+  │                                                           │
+  │ Footer: Peace✘ Counter · <relative timestamp>            │
+  └───────────────────────────────────────────────────────────┘
+  Components:
+  Row 1: [🟢 Enable] [🔴 Disable] [🔄 Refresh]
+    'counter:panel:enable'   Success
+    'counter:panel:disable'  Danger
+    'counter:panel:refresh'  Secondary
+  Row 2: ChannelSelectMenu  'counter:panel:channel'  plh "Add a counting channel"
+  Row 3: StringSelectMenu   'counter:panel:remove'   plh "Remove a counting channel"
+  Row 4: StringSelectMenu   'counter:panel:list'     plh "📋 Channel List…"
+  Row 5: StringSelectMenu   'counter:panel:config'   plh "⚙️ Config…"
+
+  DISABLED state (no channels):
+  ┌─ Counter Panel — Peace✘ ─────────────────────────────────┐
+  │ 🎮 Counter Panel                                          │
+  │                                                           │
+  │ Status: ⚪ Disabled · No channels configured             │
+  │                                                           │
+  │ _The counting game is off. Pick a channel below to start  │
+  │ the very first one._                                      │
+  │                                                           │
+  │ Footer: Peace✘ Counter · <relative timestamp>            │
+  └───────────────────────────────────────────────────────────┘
+  Row 1: [🟢 Enable] [🔴 Disable] (Disable is disabled-grey)
+  Row 2: ChannelSelectMenu 'counter:panel:channel'
+  (rows 3-5 hidden while disabled)
+
+═══════════════════════════════════════════════════════════════════════
+ 2. SUB-PANEL — CHANNEL LIST (ephemeral)
+═══════════════════════════════════════════════════════════════════════
+  Shown via StringSelectMenu 'counter:panel:list'. Once picked, the
+  select is replaced by a per-channel management row.
+  ┌─ Counting Channels — Peace✘ ─────────────────────────────┐
+  │ 📋 Counting Channels (3)                                  │
+  │                                                           │
+  │ #counting   mode: Numbers and arithmetic                 │
+  │             next: 48  ·  best: 312  ·  resets: 5         │
+  │ #general    mode: Numbers only                           │
+  │             next: 2   ·  best: 12   ·  resets: 1         │
+  │ #test       mode: Numbers and arithmetic  [PAUSED]       │
+  │             next: 0   ·  best: 0    ·  resets: 0         │
+  │                                                           │
+  │ Footer: Peace✘ Counter · <relative timestamp>            │
+  └───────────────────────────────────────────────────────────┘
+  Row 1: [🔄 Refresh] [⏸ Pause All] [▶ Resume All]
+  Row 2: StringSelectMenu 'counter:list:channel' plh "Pick a channel to manage…"
+  Row 3: (rendered after pick — per-channel panel)
+    [Reset Counter] 'counter:channel:reset:<gid>:<chid>'
+    [Change Mode]  'counter:channel:mode:<gid>:<chid>'
+    [Pause]        'counter:channel:pause:<gid>:<chid>'
+    [Remove]       'counter:channel:remove:<gid>:<chid>'
+    [View History] 'counter:channel:history:<gid>:<chid>'
+  (this row replaces the select that produced it — same message)
+
+═══════════════════════════════════════════════════════════════════════
+ 3. SUB-PANEL — CONFIG (ephemeral)
+═══════════════════════════════════════════════════════════════════════
+  Shown via StringSelectMenu 'counter:panel:config'. 5 rows of String
+  SelectMenus, one per config key (Discord caps 5 rows/message):
+  Row 1: 'counter:config:select:mode'   plh "Mode: Numbers only ▼"
+         [Numbers only] [Numbers and arithmetic]
+  Row 2: 'counter:config:select:on_ruin' plh "On Ruin: Delete message ▼"
+         [Delete message] [Leave with ❌ reaction]
+  Row 3: 'counter:config:select:on_success' plh "On Success: ✅ + prev ▼"
+         [✅ + prev number] [✅ only] [nothing]
+  Row 4: 'counter:config:select:behavior'
+         plh "Same-user guard: ON · notify prev: ON · reset: to zero"
+         [Same-user guard ON/OFF]
+  Row 5: 'counter:config:select:milestone' plh "Milestones: every 100 ▼"
+         [every 100] [every 500] [never]
+
+  A milestone-save on reset works like this (matches the reference
+  screenshot behavior):
+    - reset_behavior 'to_checkpoint' → RUIN resets the counter to the
+      last saved checkpoint (1..checkpoint_every) instead of 0.
+    - checkpoint saved after every "checkpoint_every" correct counts.
+
+═══════════════════════════════════════════════════════════════════════
+ 4. SUCCESS (public — posted in the counting channel)
+═══════════════════════════════════════════════════════════════════════
+  NOT an embed. On a correct count the bot only:
+    - reacts to the message with ✅ then with the <:prev_number>
+      unicoded number-reaction (see reactions contract below).
+  No message is posted for a plain success.
+
+  REACTIONS CONTRACT
+  ──────────────────
+  On correct count (message kept):
+    ✅ reaction first, then the previous number as the next reaction
+    (i.e. message "49" gets ✅ then 4️⃣8️⃣ so the counter reads easily).
+  On RUIN (message deleted):
+    if on_ruin = 'delete' → DELETE the offending message, no reaction.
+    if on_ruin = 'react'  → leave the message, add ❌ reaction.
+  RUIN message posted by bot ALWAYS visible in the channel (never
+  ephemeral).
+
+═══════════════════════════════════════════════════════════════════════
+ 5. RUIN (public — posted in the counting channel)
+═══════════════════════════════════════════════════════════════════════
+  ┌─ Peace✘ ─────────────────────────────────────────────────┐
+  │ ✅ "counting [APP badge] 9/4/2026 12:59 AM"             │
+  │                                                           │
+  │ @! RUINED IT AT 36! Next number is 1. You can't count     │
+  │ two numbers in a row.                                     │
+  │ Vote here to earn saves so you can continue counting      │
+  │ next time. See c!help.                                    │
+  └───────────────────────────────────────────────────────────┘
+  text = the "counting" header + APP badge + timestamp (relative)
+  footer = "Peace✘ Counter · <relative timestamp>"
+
+  Spec text (from the reference screenshot, reused verbatim):
+    "counting [APP badge] 9/4/2026 12:59 AM\n\n@! RUINED IT AT 36!
+     Next number is 1. You can't count two numbers in a row.\nVote
+     here to earn saves so you can continue counting next time.
+     See c!help."
+  → rendered into the embed description exactly as above, with the
+    current server-relative timestamp in place of 9/4/2026 12:59 AM.
+
+═══════════════════════════════════════════════════════════════════════
+ 6. MILESTONE (public — posted in the counting channel)
+═══════════════════════════════════════════════════════════════════════
+  On next % checkpoint_every === 0:
+  ┌─ Peace✘ ─────────────────────────────────────────────────┐
+  │ 🎉 312! New all-time best!                                │
+  │                                                           │
+  │ We reached **312** in #counting — the longest streak this │
+  │ channel has ever seen. 🏆                                  │
+  │                                                           │
+  │ Milestone: **every 100** · Next: 400                     │
+  │ Footer: Peace✘ Counter · <relative timestamp>            │
+  └───────────────────────────────────────────────────────────┘
+  Always visible. Post when current number (not just >100) hits a
+  multiple of checkpoint_every AND is > current best (i.e. both
+  a milestone AND a new best get one combined post). If the number is
+  a milestone but NOT a new best → post the milestone embed only.
+
+═══════════════════════════════════════════════════════════════════════
+ 7. EMPTY STATE (no channels configured yet)
+═══════════════════════════════════════════════════════════════════════
+  Shown in the main panel embed when counter_channels has 0 rows.
+  (identical to the DISABLED state in §1 — see that panel)
+
+═══════════════════════════════════════════════════════════════════════
+ 8. ADD-CHANNEL (ChannelSelectMenu confirm)
+═══════════════════════════════════════════════════════════════════════
+  Pick a channel via ChannelSelectMenu 'counter:panel:channel' →
+  a short confirmation (same row set as the main panel) keeps the
+  flow uninterrupted. Confirmation payload = re-render of main panel
+  embed with the new channel now listed.
+  Ephemeral: "✅ **#counting** is now a counting channel. First
+  number is **1**."
+
+═══════════════════════════════════════════════════════════════════════
+ CUSTOM-ID CONTRACT (all prefixed `counter:`)
+═══════════════════════════════════════════════════════════════════════
+  Buttons:  counter:panel:enable / disable / refresh
+            counter:panel:start   (placeholder = future /lobby)
+  Channel selects: counter:panel:channel:<ctx>
+  String selects:  counter:panel:remove / list / config
+            counter:list:channel
+            counter:config:select:mode / on_ruin / on_success /
+                     behavior / milestone
+  Buttons:  counter:channel:reset / mode / pause / remove / history
+            <gid>:<chid>
+  Stale / unknown `counter:` customIds → acknowledge silently
+  (deferUpdate) so Discord never shows a timeout.
+
+  Ctx encoding uses colon-joined Discord ids, e.g.
+    counter:channel:reset:111111111111111111:222222222222222222
+
+═══════════════════════════════════════════════════════════════════════
+ SCHEMA (schema.sql — executed by db.js on boot, keep idempotent)
+═══════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS counter_channels (
+  channel_id TEXT PRIMARY KEY,
+  guild_id   TEXT NOT NULL,
+  mode       TEXT NOT NULL DEFAULT 'numbers_only',
+    -- 'numbers_only' | 'numbers_arithmetic'
+  on_ruin    TEXT NOT NULL DEFAULT 'delete',
+    -- 'delete' | 'react'
+  on_success TEXT NOT NULL DEFAULT 'react_number',
+    -- 'react_number' | 'react_check' | 'none'
+  same_user_guard INTEGER NOT NULL DEFAULT 1,
+  notify_previous INTEGER NOT NULL DEFAULT 1,
+  reset_behavior TEXT NOT NULL DEFAULT 'to_zero',
+    -- 'to_zero' | 'to_checkpoint'
+  checkpoint_every INTEGER NOT NULL DEFAULT 100,
+    -- 100 | 500 | 0 (0 = never)
+  current   INTEGER NOT NULL DEFAULT 0,
+  last_counter_id TEXT,
+  best      INTEGER NOT NULL DEFAULT 0,
+  resets    INTEGER NOT NULL DEFAULT 0,
+  paused    INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_counter_guild ON counter_channels(guild_id);
+
+CREATE TABLE IF NOT EXISTS counter_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id TEXT NOT NULL,
+  guild_id   TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  number     INTEGER,            -- 0 on reset rows
+  kind       TEXT NOT NULL,      -- 'count' | 'ruin' | 'reset'
+  reason     TEXT,               -- 'wrong_number' | 'same_user_twice'
+                                --  | 'invalid_format' | 'manual'
+  ts         INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_counter_history_channel
+  ON counter_history(channel_id, ts DESC-door);
+CREATE INDEX IF NOT EXISTS idx_counter_history_user
+  ON counter_history(guild_id, user_id, ts DESC);
+
+CREATE TABLE IF NOT EXISTS counter_stats (
+  channel_id TEXT PRIMARY KEY,
+  best   INTEGER NOT NULL DEFAULT 0,
+  counts INTEGER NOT NULL DEFAULT 0,
+  ruins  INTEGER NOT NULL DEFAULT 0
+);
+
+─── FILE STRUCTURE ───────────────────────────────────────────────
+src/utils/counter/
+  ├── schema.sql
+  ├── db.js              (sqlite bootstrap + migrations + WAL)
+  ├── store.js           (channel CRUD, history writes, transactions)
+  ├── evaluator.js       (safe arithmetic parser)
+  ├── game.js            (success/ruin/ignore decision + reactions)
+  ├── panel.js           (panel embed + component builders)
+  ├── embeds.js          (success/ruin/milestone/error embeds)
+  ├── emojis.js          (counter emoji map — reuse shared customs)
+  ├── ui.js              (shared primitives: buttons, selects)
+  ├── interactions/
+  │   ├── buttons.js
+  │   ├── selects.js
+  │   └── registry.js
+  └── index.js           (public API)
+
+src/commands/fun/
+  └── counter.js         (/counter slash command — opens panel)
+
+src/events/
+  └── counterMessage.js  (messageCreate handler — delegates to game.js)
+
+tests/counter/
+  ├── evaluator.test.js
+  ├── game.test.js       (success, ruin, ignore paths)
+  ├── store.test.js      (transactions, history)
+  ├── panel.test.js      (snapshot of every panel state)
+  └── race.test.js       (two messages arrive simultaneously → 
+                          exactly one wins)
+
+─── CONCURRENCY & RACE SAFETY ────────────────────────────────────
+Two members send the correct next number at the same instant. Only ONE
+must win. Implementation:
+
+  - Per-channel mutex: Map<channel_id, Promise> chain in game.js
+  - Wrap the whole decision in db.transaction():
+      const row = sqlChannelGet.get(channel_id);
+      if (row.current + 1 !== computed) → return ruin
+      if (row.last_counter_id === author) → return ruin
+      updateChannel.run(...)
+      insertHistory.run(...)
+  - better-sqlite3 transactions are synchronous → inherently serialized
+    across the Node process. Still chain a per-channel promise to guard
+    against async work between read and write (e.g. an await fetch).
+  - Test: fire 100 concurrent messageCreate events for the same channel
+    with numbers 1..100 → exactly 100 successes, 0 ruins, current ===
+    100.
+
+─── DELIVERABLES (STOP FOR APPROVAL AFTER EACH) ──────────────────
+ 1. mockup.txt — text mockups of:
+      /counter main panel
+      /counter → Channel List sub-panel
+      /counter → Config sub-panel
+      RUIN embed (from reference screenshot)
+      SUCCESS (with reactions)
+      Milestone embed (100, 500)
+      Empty state (no channels configured yet)
+      Add-channel modal (ChannelSelectMenu confirm)
+ 2. schema.sql + db.js + store.js
+ 3. evaluator.js + tests
+ 4. game.js + embeds.js + emojis.js
+ 5. panel.js + ui.js + interactions/*
+ 6. commands/fun/counter.js
+ 7. events/counterMessage.js + wiring in src/events/index.js
+ 8. tests/counter/*
+ 9. CHANGELOG entry + docs/counter.md (short user guide)
+
+After each deliverable, STOP and ask:
+  "Approve Deliverable 1? Reply APPROVE for Deliverable 2, or REVISE
+  <what>."
+
+─── CLEARING-ON-APPROVAL NOTE ─────────────────────────────────────
+The panel customIds and schema above are pre-agreed so implementation
+deliverables reference them directly. Any change to a customId or table
+name appearing in both the mockup and a later deliverable must be
+flagged in the diff notes for that deliverable and re-approved.
