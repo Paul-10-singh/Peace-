@@ -1,0 +1,373 @@
+════════════════════════════════════════════════════════════════════════
+ TRUTH OR DARE MODULE v1.0 "PANEL-DRIVEN PARTY" — UI MOCKUPS · v1
+ Developed by Smith.Code · for approval BEFORE any code is written
+ Revision v1: initial review mockup — covers every panel, state, and
+              embed listed in the ToD spec.
+════════════════════════════════════════════════════════════════════════
+
+CHANGE SUMMARY (this revision · initial)
+─────────────────────────────────────────────────────────────────────────
+ (initial mockup — no prior revision to diff against)
+
+GLOBAL RULES (every embed obeys these)
+────────────────────────────────────────────────────────────────────────
+• Color accents (Discord) — set per embed variant:
+    ACTIVE   #57F287 (green)   warning #FEE75C (yellow)
+    INACTIVE #ED4245 (red)     neutral #2B2D31 (dark)
+    info     #5865F2 (blurple)  gold    #FFD700 (leader #1)
+• Every embed: title starts with an emoji, ends with a footer
+  "Peace✘ Truth or Dare · <relative timestamp>".
+• Members always <@id> mentions (never raw IDs) — uncached members
+  are fetched via members.fetch() before display.
+• Every command defers then edits → no freezes.
+• Buttons customId: tod:<area>:<action>:<ctx>
+  (e.g. tod:panel:start, tod:round:truth:<gid>:<sid>:<uid>)
+• SelectMenus customId: tod:<area>:<select>:<ctx>
+• Modals customId: tod:<area>:modal:<ctx>
+
+─ EMOJI RULES (identical policy to VC module) ────────────────────────────
+• Never hardcode emojis in commands — always import from emojis.js.
+• Custom emoji IDs come from a central src/utils/shared/emojis.js
+  registry (reuse VC's stored custom set where semantics overlap —
+  correct/wrong/time/status — via the shared E object). No invented
+  IDs, no new uploads.
+• React/UI build uses the bot's stored customs whenever a default
+  glyph has an equivalent; pure-Unicode defaults stay spelled out so
+  review sees the exact glyph.
+
+════════════════════════════════════════════════════════════════════════
+  1. /truthordare  — MAIN PANEL (ephemeral)
+════════════════════════════════════════════════════════════════════════
+  ┌─ Truth or Dare — Peace✘ ────────────────────────────────┐
+  │ 🎭 Truth or Dare                                        │
+  │                                                         │
+  │ Status: Idle · No active session                        │
+  │ Intensity: PG-13 · Categories: Funny, Deep, Weird       │
+  │ Rounds Played: 128 · Longest Session: 33 rounds         │
+  │                                                         │
+  │ ── How it works ──                                      │
+  │ 1. Press [Start Session] to open a lobby in this        │
+  │    channel                                              │
+  │ 2. Players press [Join] within the 60s join window      │
+  │ 3. Bot picks a random player — they pick Truth or Dare  │
+  │ 4. Each round: 1 turn per player · all can hop in       │
+  │                                                         │
+  │ Buttons: [🎭 Start Session] [⚙️ Settings] [📝 Manage    │
+  │          Prompts] [📊 Stats] [📜 History]               │
+  └─────────────────────────────────────────────────────────┘
+
+  Everything in the /truthordare panel is EPHEMERAL except the
+  session messages the bot posts INTO the chosen channel.
+
+════════════════════════════════════════════════════════════════════════
+  2. LOBBY  (posted PUBLIC in the chosen channel)
+════════════════════════════════════════════════════════════════════════
+  ┌─ Truth or Dare — Lobby ─────────────────────────────────┐
+  │ 🎭 Truth or Dare — Lobby                                │
+  │ Host: @Admin                                            │
+  │ Channel: #game-corner                                   │
+  │ Intensity: PG-13 · Categories: Funny, Deep, Weird       │
+  │ ⏱ 60s join window · 30s to choose  [PG-13 badge]        │
+  │                                                         │
+  │ Players (2/20):                                         │
+  │   01. @UserA  02. @UserB                                │
+  │                                                         │
+  │ Join by pressing the button below!                      │
+  │ Buttons: [✅ Join] [▶️ Start Now] [🚪 Leave]            │
+  └─────────────────────────────────────────────────────────┘
+
+  [✅ Join] → adds the presser to the session (ephemeral
+  confirmation). Lobby embed RE-RENDERS, player count updates:
+     Players (3/20): [a] 01. @UserA  02. @UserB  03. @UserC
+
+  Max players default 20 (configurable up to 50).
+
+════════════════════════════════════════════════════════════════════════
+  3. ROUND — PLAYER'S TURN
+════════════════════════════════════════════════════════════════════════
+  ┌─ Player's Turn ─────────────────────────────────────────┐
+  │ 🎭 Round 7 — @UserB's turn!                             │
+  │ This round: @UserA (1/6) · @UserB (2/6) · ... next      │
+  │                                                         │
+  │ Choose your fate, @UserB:                               │
+  │   [a:E.correct] Truth   [a:E.wrong] Dare   [⏭️ Skip]    │
+  │                                                         │
+  │ ⏱ You have 30 seconds to choose (auto-skip on timeout)  │
+  └─────────────────────────────────────────────────────────┘
+  Buttons customId: tod:round:truth:<gid>:<sid>:<uid> · dare ·
+  skip
+      (skip = strike-free, but consumes the round; NO strike —
+       always allowed because R-turn timers still apply)
+
+  R4 RULE: on 3 strikes → player becomes SPECTATOR for the rest
+  of the session (still sees prompts, can no longer be picked).
+  R5 RULE: each player starts the session with 3 Skip tokens;
+  tokens spend on Skip. When out of tokens, Skip button → 
+  ephemeral: "⏭️ You're out of skips for this session."
+
+════════════════════════════════════════════════════════════════════════
+  4. PROMPT — TRUTH or DARE
+════════════════════════════════════════════════════════════════════════
+  ┌─ Truth — @UserB ────────────────────────────────────────┐
+  │ 🎭 Truth · Funny · PG-13                                │
+  │ "What's the most embarrassing thing you've done in      │
+  │  front of a crowd?"                                     │
+  │                                                         │
+  │ ⏱ Answer within 2 minutes                              │
+  │ Buttons: [✅ Done] [⏭️ Skip] [❌ Refuse]                 │
+  └─────────────────────────────────────────────────────────┘
+
+  ┌─ Dare — @UserB ─────────────────────────────────────────┐
+  │ 🎭 Dare · Weird · PG-13                                 │
+  │ "Do 10 squats in front of the camera."                  │
+  │                                                         │
+  │ ⏱ Complete within 5 minutes                            │
+  │ Buttons: [✅ Done] [⏭️ Skip] [❌ Refuse]                 │
+  └─────────────────────────────────────────────────────────┘
+
+  ── STATES ─────────────────────────────────────────────────
+  [✅ Done] → bot posts: "✅ @UserB completed it! Round n → 
+             next player" (public in channel, footer stamp)
+  [⏭️ Skip] → bot posts: "⏭️ @UserB skipped. Round n → next 
+             player"
+  [❌ Refuse] → strike #1/3: "❌ @UserB refused! Strike 1/3 
+             (2 left before spectator)."
+  Timeout    → strike + auto-skip: "⏱ @UserB didn't answer in 
+             time. Strike 2/3 · round auto-skipped."
+  3 strikes → "💥 @UserB is now a SPECTATOR for this session."
+  If ALL players are spectators OR all players skipped → session
+  ends: "⏹️ No active players left — session ended."
+
+  Same prompt never repeats twice in a row (R8).
+
+════════════════════════════════════════════════════════════════════════
+  5. END-OF-SESSION SUMMARY (public, after the final round)
+════════════════════════════════════════════════════════════════════════
+  ┌─ Session Ended — Peace✘ ────────────────────────────────┐
+  │ 🎭 Session Ended · 8 rounds                              │
+  │ Session: 2026-09-20 20:14 → 21:31 (1h 17m)               │
+  │                                                            │
+  │ ── Player stats ──                                        │
+  │ 🥇 @UserA — 3 turns · 2 truths · 1 dare · 0 skips        │
+  │ 🥈 @UserB — 3 turns · 1 truth · 2 dares · 0 skips        │
+  │ 🥉 @UserC — 2 turns · 1 truth · 0 dares · 1 skip         │
+  │                                                          │
+  │ Strikers: @UserB (1)                                     │
+  │ Intensity: PG-13 · Best streak: 6 clean turns             │
+  │ Footer: Peace✘ Truth or Dare · <timestamp>               │
+  │ Buttons: [🔄 Play Again] [📜 View Log]                    │
+  └──────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════
+  6. EMPTY / ERROR STATES
+════════════════════════════════════════════════════════════════════════
+  Main panel — no history yet:
+    ┌─ Truth or Dare — Peace✘ ──────────────────────────────┐
+    │ 🎭 Truth or Dare                                      │
+    │ Status: Idle · No active session                      │
+    │ Intensity: PG-13 · Categories: Funny, Deep, Weird     │
+    │ Rounds Played: 0 · Longest Session: —                 │
+    │                                                       │
+    │ No sessions yet — hit [🎭 Start Session] to be the    │
+    │ first!                                                │
+    └───────────────────────────────────────────────────────┘
+
+  Not your turn (ephemeral):
+    "⏳ It's not your turn, @UserX — @UserB is choosing now."
+
+  Session full (ephemeral):
+    "🔒 This session is full (20/20). Wait for the next one."
+
+  Missing permission (ephemeral):
+    "🔒 I need **Manage Guild** to run session configuration."
+
+  Deleted prompt on click (ephemeral):
+    "🗑️ That prompt was removed — pick another."
+
+  Failed custom-prompt save (ephemeral):
+    "❌ Your prompt was rejected: <reason>"
+      (<reason>: profanity · too long (>200) · duplicate)
+
+  Spicy pack locked (ephemeral):
+    "🔞 Turning on the Spicy pack requires guild intensity 
+     PG-13+ and can't be undone for 24h. Confirm?"
+      [🔞 Yes, enable] [↩️ Cancel]
+
+════════════════════════════════════════════════════════════════════════
+  7. SETTINGS SUB-PANEL — /truthordare → [⚙️ Settings]
+════════════════════════════════════════════════════════════════════════
+  ┌─ Truth or Dare — Settings ───────────────────────────────┐
+  │ ⚙️ Session default settings                              │
+  │                                                         │
+  │ Intensity:        [PG] [PG-13] [R]        (current: PG-13)│
+  │ Categories:       Funny · Deep · Weird · Spicy (on/off)  │
+  │ Join window:      30s · 60s · 90s         (current: 60s) │
+  │ Turn timer:       15s · 30s · 45s         (current: 30s) │
+  │ Truth timer:      60s · 120s · 180s       (current: 120s)│
+  │ Dare timer:       180s · 300s · 600s      (current: 300s)│
+  │ Skip tokens:      2 · 3 · 5               (current: 3)   │
+  │ Strikes to kick:  3 · 4 · 5               (current: 3)   │
+  │ Max players:      10 · 20 · 50            (current: 20)  │
+  │                                                         │
+  │ Changes apply to NEW sessions only.                     │
+  └─────────────────────────────────────────────────────────┘
+  Each setting row: StringSelectMenu (ephemeral, re-renders).
+
+════════════════════════════════════════════════════════════════════════
+  8. PROMPT MANAGER SUB-PANEL — [📝 Manage Prompts]
+════════════════════════════════════════════════════════════════════════
+  ┌─ Truth or Dare — Prompt Manager ────────────────────────┐
+  │ 📝 Custom prompts for this guild                        │
+  │                                                         │
+  │ Truths: 12 custom · 52 built-in                         │
+  │ Dares:  8 custom · 52 built-in                          │
+  │                                                         │
+  │ Last added: "Talk in an accent until your next turn"    │
+  │             (Dare · Funny · PG · by @Admin)             │
+  │ Buttons: [➕ Add Truth] [➕ Add Dare] [📜 List] [🗑️       │
+  │          Delete] [🔄 Reload]                             │
+  └─────────────────────────────────────────────────────────┘
+
+  ➕ Add flow (modal):
+    ┌─ New Truth ───────────────────────────────────────────┐
+    │ Prompt text (max 200 chars):                          │
+    │   [________________________]                          │
+    │ Category: [Funny ▼] [Deep ▼] [Weird ▼] [Spicy ▼]      │
+    │ Intensity: [PG] [PG-13] [R]                            │
+    │ [Save] [Cancel]                                       │
+    └───────────────────────────────────────────────────────┘
+    Validation: profanity filter → length → duplicate
+    (case-insensitive). Fail → ephemeral <reason>.
+
+════════════════════════════════════════════════════════════════════════
+  9. STATS SUB-PANEL — [📊 Stats]
+════════════════════════════════════════════════════════════════════════
+  ┌─ Truth or Dare — Guild Stats ───────────────────────────┐
+  │ 📊 All-time stats                                       │
+  │                                                         │
+  │ Sessions:   47                                          │
+  │ Rounds:     1,284                                       │
+  │ Truths:     612  (48%)                                  │
+  │ Dares:      672  (52%)                                  │
+  │ Skips:      143                                         │
+  │ Refusals:   89                                          │
+  │ Avg rounds / session: 27                                │
+  │                                                         │
+  │ ── Top players ──                                       │
+  │ 🥇 @UserA — 184 rounds · 12 skips · 3 strikes           │
+  │ 🥈 @UserB — 156 rounds · 8 skips · 1 strike             │
+  │ 🥉 @UserC — 142 rounds · 21 skips · 7 strikes           │
+  └─────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════
+  10. HISTORY SUB-PANEL — [📜 History] (paginated)
+════════════════════════════════════════════════════════════════════════
+  ┌─ Truth or Dare — History ───────────────────────────────┐
+  │ 📜 Last 10 sessions                                     │
+  │ 09-20  #game-corner  8 rounds · 1h 17m · 3 players      │
+  │ 09-18  #game-corner  12 rounds · 2h 04m · 5 players     │
+  │ 09-15  #game-corner  —        · 0h 41m · 2 players      │
+  │ ... (10 per page)                                       │
+  │                                                           │
+  │ Page 1/5 · Buttons: [◀ Prev] [Next ▶] [📄 Export CSV]    │
+  └─────────────────────────────────────────────────────────┘
+
+════════════════════════════════════════════════════════════════════════
+  11. SESSION FLOW (reference — how the game actually runs)
+════════════════════════════════════════════════════════════════════════
+  step 1 · LOBBY
+      Admin: /truthordare → [🎭 Start Session]
+      Bot (ephemeral): "Where should this session run?" →
+      ChannelSelectMenu (defaults to current channel)
+      Bot posts PUBLIC lobby embed in that channel
+        (see §2) — 60s join window starts
+  step 2 · ROUND START
+      Join window closes → bot picks a RANDOM active player
+      (never the same player twice in a row, R8-adjacent)
+      Bot posts PUBLIC "Round N — @Player's turn!" embed (§3)
+        with [Truth] [Dare] [Skip]
+  step 3 · PROMPT
+      Player presses Truth or Dare → bot posts the prompt
+      embed (§4) with the timers. During the prompt, OTHER
+      players' presses → ephemeral "not your turn".
+      On [✅ Done] / [⏭️ Skip] / [❌ Refuse] / timeout →
+      feedback post (§4 states), next round starts.
+  step 4 · REPEAT
+      Loop until: 3-strike spectator queue empties OR all
+      players skip OR host presses [⏹️ End].
+  step 5 · END
+      Bot posts the Session Ended summary (§5).
+      Stats + history rows written (2 transactions).
+      On bot restart with 'active' session → mark 'ended'
+      + summary_json {"ended_by":"bot_restart"} (no zombies).
+
+  All timers via src/security/scheduler.js (no raw setInterval).
+  All DB writes wrapped in db.transaction().
+
+════════════════════════════════════════════════════════════════════════
+  SCHEMA (Deliverable 2 — shown for review, NOT implemented yet)
+════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS tod_guild_config (
+  guild_id          TEXT PRIMARY KEY,
+  intensity         TEXT NOT NULL DEFAULT 'pg13',
+      -- 'pg' | 'pg13' | 'r'
+  categories        TEXT NOT NULL DEFAULT 'Funny,Deep,Weird',
+      -- CSV of enabled categories
+  join_window_s     INTEGER NOT NULL DEFAULT 60,
+  turn_timer_s      INTEGER NOT NULL DEFAULT 30,
+  truth_timer_s     INTEGER NOT NULL DEFAULT 120,
+  dare_timer_s      INTEGER NOT NULL DEFAULT 300,
+  skip_tokens       INTEGER NOT NULL DEFAULT 3,
+  strikes_to_kick   INTEGER NOT NULL DEFAULT 3,
+  max_players       INTEGER NOT NULL DEFAULT 20,
+  spicy_cooldown_until INTEGER,      -- 24h gate for Spicy pack
+  created_at        INTEGER NOT NULL,
+  updated_at        INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS tod_sessions (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id     TEXT NOT NULL,
+  channel_id   TEXT NOT NULL,
+  host_id      TEXT NOT NULL,
+  started_at   INTEGER NOT NULL,
+  ended_at     INTEGER,
+  round_count  INTEGER NOT NULL DEFAULT 0,
+  status       TEXT NOT NULL DEFAULT 'lobby',
+      -- 'lobby' | 'active' | 'ended'
+  settings_json TEXT NOT NULL, -- guild config snapshot at start
+  summary_json TEXT            -- per-player stats at end
+);
+CREATE INDEX IF NOT EXISTS idx_tod_sessions_guild
+  ON tod_sessions(guild_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS tod_players (
+  session_id   INTEGER NOT NULL,
+  user_id      TEXT NOT NULL,
+  joined_at    INTEGER NOT NULL,
+  turns        INTEGER NOT NULL DEFAULT 0,
+  truths       INTEGER NOT NULL DEFAULT 0,
+  dares        INTEGER NOT NULL DEFAULT 0,
+  skips_used   INTEGER NOT NULL DEFAULT 0,
+  strikes      INTEGER NOT NULL DEFAULT 0,
+  status       TEXT NOT NULL DEFAULT 'active',
+      -- 'active' | 'spectator' | 'left'
+  PRIMARY KEY (session_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS tod_rounds (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id   INTEGER NOT NULL,
+  round_no     INTEGER NOT NULL,
+  user_id      TEXT NOT NULL,
+  choice       TEXT,        -- 'truth' | 'dare' | NULL (timeout)
+  prompt_text  TEXT,
+  category     TEXT,
+  intensity    TEXT,
+  result       TEXT NOT NULL,
+      -- 'done' | 'skip' | 'refuse' | 'timeout'
+  started_at   INTEGER NOT NULL,
+  resolved_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_tod_rounds_session
+  ON tod_rounds(session_id, round_no);

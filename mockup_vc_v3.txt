@@ -1,0 +1,536 @@
+════════════════════════════════════════════════════════════════════════
+ VC MODULE v3.0 "PROFESSIONAL TELEMETRY" — UI MOCKUPS · v3 (EMOJI-READY)
+ Developed by Smith.Code · for approval BEFORE any code is written
+ Revision v3: applies Fix #1 – #10 from the 2026-09-20 review.
+════════════════════════════════════════════════════════════════════════
+
+CHANGE SUMMARY (this revision · mockup.txt v1 → v2)
+──────────────────────────────────────────────────────
+FIX # | WHAT CHANGED                                  | WHERE (mockup.txt)
+──────┼──────────────────────────────────────────────┼────────────────────
+ #1   | /vcstats ['<:period:1550504918756892682>' Jump to Date] button → week-     | §1 /vcstats
+      | jump Modal (YYYY-MM-DD, validated, future     |   "Components"
+      | rejected, oldest-period guard)                |
+ #2   | /vchistory "Most active" → weekday(tz avg) +  | §5 /vchistory
+      | peak-hour range with guild tz + "insufficient |   "Summary"
+      | data" fallback (<3 samples) + test            |
+ #3   | /vchistory session lines get end_reason       | §5 session line
+      | markers (*estimated* / *clamped (bot          |   format
+      | restart)* / *ended by shutdown*)              |
+ #4   | /vcrole panel → 3×3 grid + NEW [📬 Report     | §7 /vcrole
+      | Toggle] button (report_dm_enabled 0/1)        |   "Components"
+ #5   | /vctop empty state → "🔔 Notify me when       | §9 empty states
+      | active" reminder contract (24h DM, dedupe,    |   + §3 /vctop
+      | sweep) + vc_reminders table                   |
+ #6   | Sunday report footer → conditional              | §8 report
+      | report_channel_id vs "run /vctop in Server"   |   Embed 4 rules
+      | (both Embed 4 lines)                          |
+ #7   | /vchart + bars capped at 10 chars (mobile-    | GLOBAL chartBar
+      | safe) + 📱 note row                           |   + §6 /vchart
+ #8   | ['<:weeklychart:1550504968119652503>' Chart View] toggle in /vctop → DEFERRED   | DEFERRED → v3.1
+      | to v3.1 (NOT in this build)                   |
+ #9   | formatHours() single helper everywhere         | GLOBAL formatHours
+      | (412h / 412h 30m / 30m / —)                   |
+ #10  | /vchistory CSV label dynamic count             | §5 "Export CSV"
+      | ("Export all 47 sessions (CSV)", hidden on 0) |
+──────┴──────────────────────────────────────────────┴────────────────────
+
+GLOBAL RULES (every embed obeys these)
+────────────────────────────────────────
+• Color accents (Discord) — set per embed variant:
+    ACTIVE   #57F287 (green)   warning #FEE75C (yellow)
+    INACTIVE #ED4245 (red)     neutral #2B2D31 (dark)
+    info     #5865F2 (blurple)  gold    #FFD700 (leader #1)
+• Every embed: title starts with an emoji, ends with a footer
+  "Peace✘ VC · <relative timestamp>".
+• HMS always formatted via formatHMS(); numbers get thousands separator.
+• Members always <@id> mentions (never raw IDs) — uncached members
+  are fetched via members.fetch() before display.
+• Every command defers then edits → no freezes.
+• Buttons customId: vc:<area>:<action>:<ctx>
+  (e.g. vc:stats:prev:<gid>:<uid>, vc:report:page:2)
+
+FIX #9 · formatHours() — THE ONE TRUE HOURS FORMATTER (applies
+EVERYWHERE: hero block, stats strip, Sunday report, /vctask columns)
+────────────────────────────────────────────────────────────────────
+  formatHours(seconds):
+    - hours > 0 && minutes > 0  → "412h 30m"
+    - hours > 0 && minutes == 0 → "412h"
+    - hours == 0 && minutes > 0 → "30m"
+    - all zero                  → "—"
+  Tests that must pass:
+    - formatHours(1485000) === '412h 30m'
+    - formatHours(1483200) === '412h'
+    - formatHours(1800)    === '30m'
+    - formatHours(0)       === '—'
+  (Replaces every ad-hoc "412h" / "412h 30m" mix seen in v1.)
+
+FIX #7 · chartBar / progressBar — MOBILE-SAFE WIDTHS
+────────────────────────────────────────────────────────────────────
+  chartBar(width) and progressBar(p) NEVER render a bar longer than
+  10 characters, no matter how big the value (clamped). Every embed
+  that renders a bar/chart appends a small note row:
+      📱 Mobile-safe: bars capped at 10 chars
+  Chart rows use a monospace code block; bar fill ▰ done / ▱ todo.
+  Example (capped, 10-char max):
+      Sun ██████████ 4h 25m 36s    ← 10 chars, NOT more
+      Sat █████████  3h 07m 36s
+  TEST: "chart bars never exceed 10 chars regardless of value".
+
+
+PROGRESS PRIMITIVE (used everywhere)
+────────────────────────────────────────
+progressBar(p, len) → ▰ done / ▱ todo, e.g. 9h30m / 10h:
+
+    9h30m / 10h  ▰▰▰▰▰▰▰▰▱▱▱▱   95%     ...
+
+    triggers:
+      100% → active color
+      >= 95% → caution (any)
+      < 95% → inactive color
+      + "⚠ 30m left" inline hint when within reach (>= 85%)
+
+
+════════════════════════════════════════════════════════════════════════
+  1. /vcstats [member]  — THIS WEEK (default)
+════════════════════════════════════════════════════════════════════════
+  ┌─ Header ────────────────────────────────────────────────┐
+  │ 🎧 VC Stats — @Username                                 │
+  │ Period: 2026-09-13 → 2026-09-19 (This Week)             │
+  ├─ Hero Block ────────────────────────────────────────────┤
+  │ **7h 45m** / 10h   (78%)                                │
+  │ ▰▰▰▰▰▰▰▰▱▱▱▱     (progress bar)                         │
+  │ ⚠️ ⚠️ 30m left when within reach (>= 85%)               │
+  │ '<a:wrong:1550504971303395430>' INACTIVE — 2h 14m to go                               │
+  ├─ Discord Status ────────────────────────────────────────┤
+  │ 🟢 Online (in VC: General)                              │
+  │    (if intent missing → "⚠ Presence unavailable —        │
+  │     enable the Presence intent for live status")        │
+  ├─ Daily Breakdown ───────────────────────────────────────┤
+  │ Mon 09-13  ▰▱▱▱▱▱▱▱▱▱  — 0h 00m                       │
+  │ Tue 09-14  ▰▱▱▱▱▱▱▱▱▱  — 0h 00m                       │
+  │ Wed 09-15  ▰▱▱▱▱▱▱▱▱▱  — 0h 00m                       │
+  │ Thu 09-16  ▰▱▱▱▱▱▱▱▱▱  — 0h 00m                       │
+  │ Fri 09-17  ▰▱▱▱▱▱▱▱▱▱  — 3m 11s                       │
+  │ Sat 09-18  ▰▰▰▰▰▰▱▱▱▱  — 3h 07m 36s                   │
+  │ Sun 09-19  ▰▰▰▰▰▰▰▰▱▱  — 4h 25m 36s                   │
+  ├─ Components ────────────────────────────────────────────┤
+  │ ['<:weeklychart:1550504968119652503>' Last Week] [📈 History 30d] ['<:goalcompleted:1550504884049154159>' Leaderboard]         │
+  │ ['<:period:1550504918756892682>' Jump to Date]        ← NEW (FIX #1)                 │
+  └─────────────────────────────────────────────────────────┘
+
+  Buttons:
+    - `vc:stats:prev:<gid>:<uid>`  "'<:weeklychart:1550504968119652503>' Last Week"  → re-renders
+      embed for last week (header period + hero + all rows update)
+    - `vc:stats:hist:<gid>:<uid>`  "📈 History 30d" → opens
+      /vchistory inline (paginated, see section 5)
+    - `vc:stats:top:<gid>`         "'<:goalcompleted:1550504884049154159>' Leaderboard" → opens /vctop
+      inline
+    - `vc:stats:jump:<gid>:<uid>`  "'<:period:1550504918756892682>' Jump to Date" → opens a modal:
+
+        ┌─ Jump to a Week ────────────────────────────────────┐
+        │ '<:period:1550504918756892682>' **Jump to a Week**                               │
+        │ Pick any date — I'll show you the week it falls in. │
+        ├─ Input ─────────────────────────────────────────────┤
+        │ TextInput "week_of"  (required)                     │
+        │   label: "Week start date (YYYY-MM-DD)"             │
+        │   placeholder: "e.g. 2026-08-01"                    │
+        │   min_length: 10 · max_length: 10                  │
+        └─────────────────────────────────────────────────────┘
+
+      On submit (vc:stats:jump handling):
+        1. validate with isValidDate() — invalid → ephemeral
+           "'<a:wrong:1550504971303395430>' Please enter a valid date (YYYY-MM-DD)."
+        2. compute the ISO week range containing that date
+           (weeks start Monday)
+        3. if the date is in the FUTURE → ephemeral:
+           "⏳ That week hasn't happened yet."
+        4. else → re-render the full embed for that week (header
+           period + hero + all rows update).
+
+  No-more-history state: when at the oldest available period the
+  ['<:weeklychart:1550504968119652503>' Last Week] button becomes disabled (grayed out, disabled:true)
+  with label "· Oldest period reached".
+
+
+════════════════════════════════════════════════════════════════════════
+  2. /vcstats_custom <start> <end> [member]  — CUSTOM PERIOD
+════════════════════════════════════════════════════════════════════════
+  Same embed as /vcstats but:
+    - Header period = custom range: "2026-08-01 → 2026-09-19"
+    - period header: "Custom Period"
+    - Hero number = total for that range
+    - footnote: "'<:period:1550504918756892682>' 50 days · Xh YYm/day avg · '<a:correct:1550504846199758928>' above goal"
+      (Fix #9 formatHours everywhere)
+    - Daily breakdown = every day in the range, clamped to 10 visible
+      rows + "▸ 40 more days"
+  Buttons: ['<:weeklychart:1550504968119652503>' Default Period] [📈 History 30d] [📤 Export CSV]
+    - Export CSV (FIX #10 label): "📄 Export all N sessions (CSV)" —
+      dynamic count; button HIDDEN when 0 sessions · DMs the .csv.
+
+
+════════════════════════════════════════════════════════════════════════
+  3. /vctop [top] [channel]  — LEADERBOARD (paginated)
+════════════════════════════════════════════════════════════════════════
+  ┌─ Header ─────────────────────────────────────────────────┐
+  │ '<:goalcompleted:1550504884049154159>' VC Leaderboard — Server Name                          │
+  │ This Week · 2026-09-13 → 2026-09-19                      │
+  ├─ Stats Strip ────────────────────────────────────────────┤
+  │ 👥 33 members · '<a:time:1550504955691929630>' 412h total · '<:target:1550504952349196479>' 10h goal  (Fix #9)     │
+  ├─ Rankings ───────────────────────────────────────────────┤
+  │ 🥇 @User1     ▰▰▰▰▰▰▰▰▰▰  29h 30m  '<a:correct:1550504846199758928>'                   │
+  │ 🥈 @User2     ▰▰▰▰▰▰▰▰▰▱  25h 50m  '<a:correct:1550504846199758928>'                   │
+  │ 🥉 @User3     ▰▰▰▰▰▰▰▰▱▱  21h 19m  '<a:correct:1550504846199758928>'                   │
+  │ 04. @User4    ▰▰▰▰▰▰▰▱▱▱  19h 44m  '<a:correct:1550504846199758928>'                   │
+  │ 05. @User5    ▰▰▰▰▰▰▱▱▱▱  17h 02m  '<a:correct:1550504846199758928>'                   │
+  │ 06. @User6    ▰▰▰▰▰▱▱▱▱▱  14h 11m  '<a:correct:1550504846199758928>'                   │
+  │ 07. @User7    ▰▰▰▰▱▱▱▱▱▱  11h 03m  '<a:wrong:1550504971303395430>'                   │
+  │ 08. @User8    ▰▰▰▱▱▱▱▱▱▱  08h 57m  '<a:wrong:1550504971303395430>'                   │
+  │ 09. @User9    ▰▰▱▱▱▱▱▱▱▱  05h 41m  '<a:wrong:1550504971303395430>'                   │
+  │ 10. @User10   ▰▱▱▱▱▱▱▱▱▱  01h 12m  '<a:wrong:1550504971303395430>'                   │
+  ├─ Components ─────────────────────────────────────────────┤
+  │ [◀ Prev] [Page 1/4] [Next ▶] [📄 Export CSV]             │
+  │ [🔔 Notify me when active]   ← empty state replaces rows   │
+  └──────────────────────────────────────────────────────────┘
+
+  Buttons:
+    - `vc:top:prev:<gid>:<page>`  "◀ Prev"  → previous page
+    - `vc:top:next:<gid>:<page>`  "Next ▶"  → next page
+    - `vc:top:jump:<gid>`         "Jump ▶"  → page select menu
+    - `vc:top:csv:<gid>`          "📄 Export CSV" → DMs top-10+ CSV
+
+  /vctop subcommands:
+    - "Top X" filter via the button row
+    - channel filter: /vctop channel:<channel> → header shows
+      "This Week · 🔊 General" and re-renders leaderboard filtered
+      to that channel only (uses vc_per_channel totals)
+
+  Jump ▼ → StringSelectMenu listing pages (1/4, 2/4, ... guard
+  max 25 pages). Export CSV → DMs full top-10+ CSV.
+
+  DEFERRED (FIX #8): the ['<:weeklychart:1550504968119652503>' Chart View] toggle button for /vctop
+  (swapping to an ASCII chart inline) is NOT included in this build —
+  see the "DEFERRED TO v3.1" section at the bottom.
+
+
+════════════════════════════════════════════════════════════════════════
+  4. /vctask <role>  — ROLE TASK VIEW
+════════════════════════════════════════════════════════════════════════
+  ┌─ Header ─────────────────────────────────────────────────┐
+  │ '<:target:1550504952349196479>' VC Task — @RoleName                                   │
+  │ This Week · 2026-09-13 → 2026-09-19                      │
+  ├─ Stats Strip ────────────────────────────────────────────┤
+  │ 👥 33 members · '<a:time:1550504955691929630>' 412h total · '<:target:1550504952349196479>' 10h goal  (Fix #9)     │
+  │ Members with role: 33 · Active: 10 · Inactive: 23        │
+  ├─ Rankings ───────────────────────────────────────────────┤
+  │ 🥇 @User1     ▰▰▰▰▰▰▰▰▰▰  29h 30m  '<a:correct:1550504846199758928>'                   │
+  │ ... (same row format as /vctop, up to 10)                │
+  ├─ Components ─────────────────────────────────────────────┤
+  │ ['<a:time:1550504955691929630>' Time] (sort toggle, active) · [◀ Prev] [Page 1/3]     │
+  │ [Next ▶]                                                 │
+  └──────────────────────────────────────────────────────────┘
+
+  NOTE: the [🔤 Name] and ['<a:correct:1550504846199758928>' Status] sort toggles shown in the v1
+  mockup are DEFERRED to v3.1 (FIX #8) — only ['<a:time:1550504955691929630>' Time] is active in
+  v3.0. Kept in the button row but grayed/disabled with tooltip
+  "· v3.1".
+
+════════════════════════════════════════════════════════════════════════
+  5. /vchistory <member> [days]  — SESSION HISTORY (NEW)
+════════════════════════════════════════════════════════════════════════
+  ┌─ Header ─────────────────────────────────────────────────┐
+  │ 📜 VC History — @Username                                │
+  │ Last 30 days · 47 sessions · 58h 12m total               │
+  ├─ Summary ────────────────────────────────────────────────┤
+  │ Avg session: 1h 14m · Longest: 4h 32m                    │
+  │ Most active: Saturday · Peak hour: 21:00                 │
+  ├─ Recent Sessions ────────────────────────────────────────┤
+  │ 09-19 20:14 → 00:39  4h 25m   🔊 General                │
+  │ 09-18 21:02 → 00:10  3h 07m   🔊 General                │
+  │ 09-17 22:48 → 22:51  0h 03m   🔇 AFK                    │
+  │ ... (10 per page)                                       │
+  ├─ Components ─────────────────────────────────────────────┤
+  │ [◀ Prev] [Page 1/5] [Next ▶] [📄 Export all 47 sessions   │
+  │  (CSV)]                        ← FIX #10 dynamic label     │
+  └──────────────────────────────────────────────────────────┘
+
+  Session line format:
+    `<MM-DD> <HH:mm> → <HH:mm>` · `<duration>` · `<channel emoji + name>`
+    Mute indicators appended: 🔇 self-mute · ⏸ deafened
+
+  FIX #3 — SESSION CAVEAT MARKERS (end_reason):
+    When a session's end is NOT a clean leave/move/disconnect, append
+    an italic caveat to the session line so data-quality problems stay
+    visible:
+      end_reason 'reconcile'   →  *estimated*
+      end_reason 'bot-offline' →  *clamped (bot restart)*
+      end_reason 'shutdown'    →  *ended by shutdown*
+      end_reason 'leave'|'move'|'disconnect' → (no marker)
+    Example rows:
+      09-17 22:48 → 22:51  0h 03m  🔇 AFK       *estimated*
+      09-15 20:14 → 23:59  3h 45m  🔊 General  *clamped (bot
+                                                restart)*
+      09-14 19:30 → 20:58  1h 28m  🔊 General  *ended by shutdown*
+      09-13 20:14 → 00:39  4h 25m  🔊 General  (no marker)
+
+  FIX #2 — MOST-ACTIVE SUMMARY LINE (tz-aware):
+    Text becomes:
+      Most active day: <Weekday> (avg <formatHours>) · Peak hour:
+      <HH:mm>–<HH:mm> <TZ>
+    - <TZ> = the guild's configured IANA timezone (vc_guild_config.tz),
+      e.g. "Asia/Kolkata"
+    - <avg> = total seconds on that weekday ÷ count of that weekday
+      in the selected window
+    - if that weekday has FEWER THAN 3 samples → fallback:
+      "Most active day: (insufficient data)"  (no weekday/avg shown)
+    TEST: "most-active day with <3 samples returns insufficient data"
+
+  Export CSV: "📄 Export all <count> sessions (CSV)" — dynamic count
+  from the current query. When count is 0 → button HIDDEN entirely.
+  Click → DMs user a .csv attachment (ephemeral, errors handled).
+
+  Pagination: 10 sessions/page; [◀ Prev] [Page ##] [Next ▶].
+  Session caveats from stayVc/24-7/shutdown sessions included.
+
+
+════════════════════════════════════════════════════════════════════════
+  6. /vchart [period]  — ASCII WEEKLY CHART
+════════════════════════════════════════════════════════════════════════
+  ┌─ Header ─────────────────────────────────────────────────┐
+  │ 📈 VC Activity Chart — Server Name                       │
+  │ This Week · 2026-09-13 → 2026-09-19                      │
+  ├─ Chart (monospace code block) ───────────────────────────┤
+  │ ```                                                      │
+  │ Sun ██████████ 4h 25m 36s                                │
+  │ Sat █████████  3h 07m 36s                                │
+  │ Fri ██         0h 03m 11s                                │
+  │ ...                                                     │
+  │ ```                                                      │
+  │ 📱 Mobile-safe: bars capped at 10 chars                  │
+  ├─ Components ─────────────────────────────────────────────┤
+  │ ['<:weeklychart:1550504968119652503>' This Week] ['<:weeklychart:1550504968119652503>' Last Week] [📤 Export CSV]             │
+  └──────────────────────────────────────────────────────────┘
+
+  FIX #7: all chart bars capped at 10 characters (clampBarWidth)
+  so nothing wraps on mobile. Note row always appended.
+
+
+════════════════════════════════════════════════════════════════════════
+  7. /vcrole set|remove|status  — ROLE GATE + SETTINGS PANEL
+════════════════════════════════════════════════════════════════════════
+  /vcrole status → settings panel embed:
+
+  ┌─ VC Settings Panel ─────────────────────────────────────┐
+  │ '<a:status:1550504949882953820>' VC Module Configuration                             │
+  ├─ Access ───────────────────────────────────────────────┤
+  │ Role gate: @VC Access (or "None — public")             │
+  ├─ Preferences ──────────────────────────────────────────┤
+  │ Timezone:   Asia/Kolkata  (UTC+5:30)                   │
+  │ Weekly goal: 10h (Fix #9)                              │
+  │ Count muted: '<a:correct:1550504846199758928>'   Count deafened: '<a:correct:1550504846199758928>'                    │
+  │ Retention:   90 days                                   │
+  │ Report DM:   '<a:correct:1550504846199758928>' Enabled          ← reflects FIX #4       │
+  ├─ Components (3×3 grid) ────────────────────────────────┤
+  │ ['<:target:1550504952349196479>' Set Goal] [🌍 Set Timezone] [🔇 Mute Rules]         │
+  │ ['<:period:1550504918756892682>' Retention] [📢 Report Channel] [📬 Report Toggle]    │
+  │                                             ↑ FIX #4 NEW │
+  │ [🔄 Reset]                                             │
+  └────────────────────────────────────────────────────────┘
+
+  Buttons/Menus (all ephemeral, panel RE-RENDERS after every change):
+    - '<:target:1550504952349196479>' Set Goal → modal: input hours
+    - 🌍 Set Timezone → StringSelectMenu (common tz + "Other")
+    - 🔇 Mute Rules → BooleanSelectMenu ×2 (count_muted,
+      count_deafened)
+    - '<:period:1550504918756892682>' Retention → StringSelectMenu (30/60/90/180/365/None)
+    - 📢 Report Channel → ChannelSelectMenu (text channel)
+    - 📬 Report Toggle (FIX #4) → BooleanSelectMenu ×1:
+        "Enable weekly report DM to guild owner?"
+          enable  → report_dm_enabled = 1
+          disable → report_dm_enabled = 0
+      Panel re-renders so "Report DM: '<a:correct:1550504846199758928>'/'<a:wrong:1550504971303395430>'" updates immediately.
+    - 🔄 Reset → confirmation button
+
+  /vcrole set/remove → role gate on/off (gate role or "None — public")
+
+
+════════════════════════════════════════════════════════════════════════
+  8. SUNDAY WEEKLY REPORT — DM TO GUILD OWNER (4 embeds)
+════════════════════════════════════════════════════════════════════════
+  Embed 1 — Header:
+    '<:goalcompleted:1550504884049154159>' **Weekly VC Activity Report**
+    **Server:** Server Name
+    **Period:** 2026-09-14 → 2026-09-20
+    **Goal:** 10 hours to be ACTIVE
+
+  Embed 2 — Server Summary:
+    '<:weeklychart:1550504968119652503>' **This Week at a Glance**
+    👥 Active members: 10 / 33
+    '<a:time:1550504955691929630>' Total VC time: 412h 30m  (Fix #9)
+    📈 Average per member: 12h 30m
+    🔥 Peak day: Saturday (98h)
+    🏅 Biggest session: @User1 — 4h 32m
+    🔊 Top channel: General (245h)
+
+  Embed 3 — Top 10 Leaderboard:
+    '<:goalcompleted:1550504884049154159>' **Top 10 Members**
+    🥇 @User1    ▰▰▰▰▰▰▰▰▰▰  29h 30m  '<a:correct:1550504846199758928>'
+    🥈 @User2    ▰▰▰▰▰▰▰▰▰▱  25h 50m  '<a:correct:1550504846199758928>'
+    ... (top 10 only; medals then 04., 05., ...)
+
+  Embed 4 — Inactive Alert (only if >5 inactive):
+    ⚠️ **23 members didn't hit the 10h goal**
+    *Top 5 closest:* (with progress bars)
+    ▰▰▰▰▰▰▰▱▱▱ @User1 — 9h 12m (92%)
+    ...
+    *Full list: /vctop*    ← see FIX #6 below
+
+  FIX #6 — FOOTER TEXT (both Embed 4 lines):
+    Line A ("Full list" for the leaderboard) replaces the bare
+    `*Full list: /vctop*` with:
+      - if report_channel_id is set →
+        "📌 **Full list:** <#report_channel_id>"
+      - else →
+        "📌 **Full list:** run `/vctop` in **{guild.name}**"
+    Line B ("Full list" for the inactive list) replaces
+    `*Full list: /vctask @Role*` with:
+      - if report_channel_id is set →
+        "📌 **Full list:** <#report_channel_id>"
+      - else →
+        "📌 **Full list:** run `/vctask @Role` in **{guild.name}**"
+
+  Rules:
+    - if no VC activity in a guild this week → skip entirely
+      (guild gets NO "no activity" message — zero noise)
+    - dedupe by guild_id
+    - fallback: if owner DMs closed → send to report_channel_id
+    - footer button: [📤 Export CSV] (DM-only, ephemeral)
+
+
+════════════════════════════════════════════════════════════════════════
+  9. EMPTY / ERROR STATES (all commands)
+════════════════════════════════════════════════════════════════════════
+  /vctop with zero activity:
+    '<:goalcompleted:1550504884049154159>' VC Leaderboard
+    ────────────────────────────────────────
+    🌙 **It's quiet in here...**
+    No VC activity recorded this week.
+    Be the first! Hop into a voice channel.
+    [🔔 Notify me when active]   ← FIX #5 (was "Set a Reminder")
+
+  FIX #5 — "Notify me when active" REMINDER CONTRACT:
+    Button: `vc:empty:remind:<gid>`  label "🔔 Notify me when active"
+    On click:
+      1. Ephemeral: "'<a:correct:1550504846199758928>' I'll DM you when someone joins VC."
+      2. Upsert row into vc_reminders(user_id, guild_id, created_at,
+         expires_at) where expires_at = now + 24h
+      3. If row already exists and NOT expired:
+         reply "⏳ You already have a reminder set (expires in
+         {formatHours(remaining)})." — do NOT overwrite
+      4. On next voiceStateUpdate for that guild (any user joins any
+         VC):
+         - find all non-expired vc_reminders for that guild
+         - DM each user "🔔 Someone joined **{guild}** VC — hop in!"
+         - delete those rows
+      5. Scheduler job 'vc-reminder-sweep' every 15 min deletes expired
+         rows (uses registry from src/security/scheduler.js)
+
+  Schema additions (Deliverable 2): vc_reminders table + index
+    (see Fix #5 above).
+
+  /vcstats when member never joined VC:
+    🎧 VC Stats — @Username
+    ────────────────────────────────────────
+    🚪 **This member hasn't joined VC yet**
+    Encourage them to hop in and start earning time!
+
+  /vctask with role that has 0 members:
+    '<:target:1550504952349196479>' VC Task — @EmptyRole
+    ────────────────────────────────────────
+    ⚠️ This role has no members.
+
+  Missing permissions (no Embed Links):
+    🔒 I need **Embed Links** permission in this channel.
+    (ephemeral)
+
+  Rate-limited:
+    ⏳ Slow down! Try again in a few seconds.
+    (ephemeral)
+
+
+════════════════════════════════════════════════════════════════════════
+  DEFERRED TO v3.1 (explicitly OUT of v3.0 scope)
+════════════════════════════════════════════════════════════════════════
+  These were discussed during revision but are intentionally deferred
+  so v3.0 ships tight. Do NOT implement in this build:
+    - ['<:weeklychart:1550504968119652503>' Chart View] toggle button inside /vctop — a button that
+      swaps the leaderboard embed for an ASCII chart inline. It was
+      rendered redundant by /vchart (Fix #8).
+    - /vctask secondary sorts [🔤 Name] and ['<a:correct:1550504846199758928>' Status] — the toggle
+      row exists in the mockup but only ['<a:time:1550504955691929630>' Time] is functional in
+      v3.0; Name/Status sorting ships in v3.1 (Fix #8).
+    - Any multi-day "export whole month" pager in /vchistory beyond
+      the current week-scoped CSV export.
+
+  Nothing else about /vcstats, /vcstats_custom, /vctop, /vctask,
+  /vchistory, /vchart, /vcrole, or the Sunday report is changed in
+  v3.1 — this section is purely the de-scope note. When v3.1 code is
+  planned, revisit ONLY the items listed above.
+
+
+════════════════════════════════════════════════════════════════════════
+  LEGEND
+────────────────────────────────────────
+• '<a:correct:1550504846199758928>'/'<a:wrong:1550504971303395430>' = statusBadge(active/inactive) — from VC_GOAL
+• ▰/▱ = progressBar fill
+• 🥇🥈🥉 / 04. / 05. = medal(index) zero-padded rank
+• All colors: ACTIVE #57F287 · INACTIVE #ED4245 · warning #FEE75C
+  · info #5865F2 · neutral #2B2D31 · gold #FFD700
+════════════════════════════════════════════════════════════════════════
+========================================================================================
+  EMOJI LEGEND · mockup.txt v2 → v3 (applied in Deliverable 1)
+========================================================================================
+  Source of truth: the E registry ALREADY STORED in the bot
+  (src/utils/vcTracker.js) — 11 custom emojis, no invented IDs,
+  no new uploads. Every swap below uses the bot's stored glyph IDs.
+
+  STEP 1 · EMOJI AUDIT
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+  Default glyphs in mockup.txt v2 that have a stored custom equivalent:
+  ✅   →  '<a:correct:1550504846199758928>'      correct / active status badge      key: correct
+  ❌   →  '<a:wrong:1550504971303395430>'        wrong / inactive status badge      key: wrong
+  ⏱   →  '<a:time:1550504955691929630>'         time / hero + stats strip          key: time
+  🎛️ →  '<a:status:1550504949882953820>'       settings panel header              key: status
+  🎛  →  '<a:status:1550504949882953820>'       settings panel header (no VS16)    key: status
+  📊  →  '<:weeklychart:1550504968119652503>'   weekly chart banner                key: weeklychart
+  📅  →  '<:period:1550504918756892682>'        period / jump-to-date header       key: period
+  🎯  →  '<:target:1550504952349196479>'        goal / target hero                 key: target
+  🏆  →  '<:goalcompleted:1550504884049154159>' goal completed / trophy            key: goalcompleted
+  👑  →  '<a:owner:1550504913815994418>'        guild owner / report DM            key: owner
+
+  Kept as default Unicode (no stored custom exists — do NOT invent):
+  🥇🥈🥉 medals · 🟢🟡🔴⚫ presence
+  · 🔊🔇🔈⏸ voice-state · ▰▱ progress
+  · formatHours() every time · arrows ←→◀▶ · bullets
+  · box-drawing ═─┬┴ · medals → goalcompleted only
+  when stored glyph exists (it does not — medals remain Unicode).
+
+  STEP 2 · FINAL MAPPING (stored custom ⇐ default)
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+  | Key              | Value                                      | Replaces  |
+  |------------------|--------------------------------------------|-----------|
+  | correct          | '<a:correct:1550504846199758928>'          | ✅ (correct / active status badge)
+  | wrong            | '<a:wrong:1550504971303395430>'            | ❌ (wrong / inactive status badge)
+  | time             | '<a:time:1550504955691929630>'             | ⏱ (time / hero + stats strip)
+  | status           | '<a:status:1550504949882953820>'           | 🎛️ (settings panel header)
+  | weeklychart      | '<:weeklychart:1550504968119652503>'       | 📊 (weekly chart banner)
+  | period           | '<:period:1550504918756892682>'            | 📅 (period / jump-to-date header)
+  | target           | '<:target:1550504952349196479>'            | 🎯 (goal / target hero)
+  | owner            | '<a:owner:1550504913815994418>'            | 👑 (guild owner / report DM)
+  | goalcompleted    | '<:goalcompleted:1550504884049154159>'     | 🏆 (goal completed / trophy)
+  | ACTIVEstatus     | '<:ACTIVEstatus:1550504832106766406>'      | (reserved)
+  | INACTIVEstatus   | '<:INACTIVEstatus:1550504891758149773>'    | (reserved)
+
+  Render note: custom emojis only render if the bot can USE external
+  emojis in that channel; they show the raw text otherwise (mockup keeps
+  the exact <:name:id> form so review sees the real syntax).
