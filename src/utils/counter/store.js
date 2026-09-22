@@ -2,710 +2,462 @@
 /*
  * Peace* -- Discord Bot -- Developed by Smith.Code
  *
- * Truth or Dare -- store.js (Deliverable 2 / data-access layer)
+ * Counter -- store.js (Deliverable 2 / data-access layer)
  *
- * All ToD persistence goes through this one module. It owns NO db handle
- * (db.js owns open / WAL pragmas / schema apply). It owns ONLY prepared
- * statements, input validation, and transactions.
+ * Byte-locked to schema.sql: EXACTLY 3 counter tables
+ *   counter_channels    per-channel config + live counting state
+ *   counter_history    append-only audit of counts / ruins / resets
+ *   counter_stats     per-channel rollups (best / counts / ruins)
  *
- * Rules this layer enforces:
- *   R4 - strikes >= strikes_to_kick -> set 'spectator' (here, not schema)
- *   R5 - skip tokens: a skip spends only while skips_used < skip_tokens
- *   R7 - spectator / left can't be picked for a turn (nextPlayer)
- *   R8 - repeat-guard: a prompt whose key was used in the previous round
- *        of this session is refused (tod_prompt_history).
- *
- * Every external function validates its inputs BEFORE touching the DB
- * (bad guild_id / session_id / user_id / kind -> TypeError, no silent
- * writes). Every multi-row write is wrapped in db.transaction().
- * Every query is a prepared statement - nothing is string-concatenated.
+ * Idiom mirrors tod/store.js EXACTLY:
+ *   - This module does NOT own the db handle open/close/PRAGMA/WAL
+ *     (db.js owns open()), it only opens one handle on require like
+ *     tod/store.js does, then works with prepared statements.
+ *   - Every public function validates its inputs FIRST (assertId /
+ *     assertPositiveInt / assertNonEmptyString...) and throws a
+ *     TypeError with a counter-prefixed message on bad input -- NO
+ *     silent writes, NO accepting junk.
+ *   - Multi-statement writes are wrapped in db.transaction() so a
+ *     successful count / ruin hits the DB atomically.
+ *   - Everything is Counter-flavored: no ToD exports, no ToD comments.
  */
 
-const fs = require('fs');
-const path = require('path');
-
-const pino = require('pino');
-const log = pino({
-  name: 'peace-tod',
-  level: process.env.LOG_LEVEL || 'info',
-  base: { service: 'peace-tod', developedBy: 'Smith.Code' },
-  timestamp: pino.stdTimeFunctions.isoTime,
-});
-
 const { open, REQUIRED_TABLES } = require('./db');
-const { ModuleSymbol } = require('./db');
 
 const db = open();
 
-/* ---------------------------------------------------------------------------
- * tod_guild_config
- * ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* counter_channels -- prepared statements                              */
+/* ------------------------------------------------------------------ */
 
-const sqlGuildGet = db.prepare(
-  `SELECT * FROM tod_guild_config WHERE guild_id = ?`
+const sqlChannelGet = db.prepare(
+  `SELECT * FROM counter_channels WHERE channel_id = ?`
 );
-const sqlGuildUpsert = db.prepare(
-  `INSERT INTO tod_guild_config
-     (guild_id, intensity, categories, join_window_s, turn_timer_s,
-      truth_timer_s, dare_timer_s, skip_tokens, strikes_to_kick,
-      max_players, spicy_enabled_at, created_at, updated_at)
-   VALUES
-     (@guild_id, @intensity, @categories, @join_window_s, @turn_timer_s,
-      @truth_timer_s, @dare_timer_s, @skip_tokens, @strikes_to_kick,
-      @max_players, @spicy_enabled_at, @created_at, @updated_at)
-   ON CONFLICT (guild_id) DO UPDATE SET
-      intensity        = excluded.intensity,
-      categories       = excluded.categories,
-      join_window_s    = excluded.join_window_s,
-      turn_timer_s     = excluded.turn_timer_s,
-      truth_timer_s    = excluded.truth_timer_s,
-      dare_timer_s     = excluded.dare_timer_s,
-      skip_tokens      = excluded.skip_tokens,
-      strikes_to_kick  = excluded.strikes_to_kick,
-      max_players      = excluded.max_players,
-      spicy_enabled_at = excluded.spicy_enabled_at,
-      updated_at       = excluded.updated_at`
+const sqlChannelListByGuild = db.prepare(
+  `SELECT * FROM counter_channels WHERE guild_id = ? ORDER BY created_at ASC`
 );
-const sqlGuildTouchSpicy = db.prepare(
-  `UPDATE tod_guild_config
-   SET spicy_enabled_at = ?, updated_at = ?
-   WHERE guild_id = ?`
+const sqlChannelUpsert = db.prepare(
+  `INSERT INTO counter_channels (
+     channel_id, guild_id, mode, on_ruin, on_success,
+     same_user_guard, notify_previous, reset_behavior, checkpoint_every,
+     current, last_counter_id, best, resets, ruins, paused,
+     created_at, updated_at
+   ) VALUES (
+     @channel_id, @guild_id, @mode, @on_ruin, @on_success,
+     @same_user_guard, @notify_previous, @reset_behavior, @checkpoint_every,
+     @current, @last_counter_id, @best, @resets, @ruins, @paused,
+     @created_at, @updated_at
+   )
+   ON CONFLICT(channel_id) DO UPDATE SET
+     mode             = excluded.mode,
+     on_ruin          = excluded.on_ruin,
+     on_success       = excluded.on_success,
+     same_user_guard  = excluded.same_user_guard,
+     notify_previous  = excluded.notify_previous,
+     reset_behavior   = excluded.reset_behavior,
+     checkpoint_every = excluded.checkpoint_every,
+     current          = excluded.current,
+     last_counter_id  = excluded.last_counter_id,
+     best             = excluded.best,
+     resets           = excluded.resets,
+     ruins            = excluded.ruins,
+     paused           = excluded.paused,
+     updated_at       = excluded.updated_at`
 );
-
-/* tod_sessions */
-const sqlSessionInsert = db.prepare(
-  `INSERT INTO tod_sessions
-     (guild_id, channel_id, host_id, started_at, status, settings_json,
-      ended_at, summary_json)
-   VALUES
-     (@guild_id, @channel_id, @host_id, @started_at, 'lobby',
-      @settings_json, NULL, NULL)`
-);
-const sqlSessionGet = db.prepare(`SELECT * FROM tod_sessions WHERE id = ?`);
-const sqlSessionSetStatus = db.prepare(
-  `UPDATE tod_sessions SET status = ? WHERE id = ?`
-);
-const sqlSessionEnd = db.prepare(
-  `UPDATE tod_sessions
-   SET status = 'ended', ended_at = ?, summary_json = ?
-   WHERE id = ?`
-);
-const sqlSessionZombies = db.prepare(
-  `SELECT id, started_at FROM tod_sessions
-   WHERE guild_id = ? AND status IN ('lobby', 'active') AND started_at < ?
-   ORDER BY started_at ASC`
-);
-const sqlSessionSummaryUpdate = db.prepare(
-  `UPDATE tod_sessions SET summary_json = ? WHERE id = ?`
-);
-const sqlOpenSessionByChannel = db.prepare(
-  `SELECT * FROM tod_sessions
-   WHERE channel_id = ? AND status IN ('lobby', 'active')
-   ORDER BY started_at DESC LIMIT 1`
+const sqlChannelDelete = db.prepare(
+  `DELETE FROM counter_channels WHERE channel_id = ?`
 );
 
-/* tod_players */
-const sqlPlayerInsert = db.prepare(
-  `INSERT OR IGNORE INTO tod_players
-     (session_id, user_id, joined_at, turns, truths, dares, skips_used,
-      strikes, status)
-   VALUES
-     (@session_id, @user_id, @joined_at, 0, 0, 0, 0, 0, 'active')`
-);
-const sqlPlayerGet = db.prepare(
-  `SELECT * FROM tod_players WHERE session_id = ? AND user_id = ?`
-);
-const sqlPlayerSetStatus = db.prepare(
-  `UPDATE tod_players SET status = ? WHERE session_id = ? AND user_id = ?`
-);
-const sqlPlayerBump = db.prepare(
-  `UPDATE tod_players SET
-      turns      = turns + @turns,
-      truths     = truths + @truths,
-      dares      = dares + @dares,
-      skips_used = skips_used + @skips_used,
-      strikes    = strikes + @strikes
-   WHERE session_id = @session_id AND user_id = @user_id`
-);
-const sqlPlayerList = db.prepare(
-  `SELECT * FROM tod_players WHERE session_id = ? ORDER BY joined_at ASC`
-);
-const sqlPlayerCount = db.prepare(
-  `SELECT COUNT(*) AS n FROM tod_players
-   WHERE session_id = ? AND status = 'active'`
-);
-const sqlPlayerNextTurn = db.prepare(
-  `SELECT * FROM tod_players
-   WHERE session_id = ? AND status = 'active'
-   ORDER BY turns ASC, joined_at ASC
-   LIMIT 1`
-);
-const sqlPlayerSetStatusAll = db.prepare(
-  `UPDATE tod_players SET status = ? WHERE session_id = ?`
-);
+/* ------------------------------------------------------------------ */
+/* counter_history -- prepared statements                               */
+/* ------------------------------------------------------------------ */
 
-/* tod_rounds prompt fill-in (present a prompt on an open round) */
-const sqlRoundSetPrompt = db.prepare(
-  `UPDATE tod_rounds SET
-      choice = @choice, prompt_text = @prompt_text, prompt_id = @prompt_id,
-      category = @category, intensity = @intensity
-   WHERE id = @id`
-);
-
-/* Phase 5 - read-only aggregates (stats panel + history panel) */
-const sqlSessionsByGuild = db.prepare(
-  `SELECT s.*, COUNT(p.user_id) AS player_count
-   FROM tod_sessions s
-   LEFT JOIN tod_players p ON p.session_id = s.id
-   WHERE s.guild_id = ?
-   GROUP BY s.id
-   ORDER BY s.started_at DESC
-   LIMIT ? OFFSET ?`
-);
-const sqlCountGuildSessions = db.prepare(
-  `SELECT COUNT(*) AS n FROM tod_sessions WHERE guild_id = ?`
-);
-const sqlStatsByGuild = db.prepare(
-  `SELECT
-     COUNT(DISTINCT s.id) AS sessions,
-     COUNT(r.id) AS rounds,
-     COALESCE(SUM(CASE WHEN r.choice = 'truth' AND r.result = 'done' THEN 1 ELSE 0 END), 0) AS truths,
-     COALESCE(SUM(CASE WHEN r.choice = 'dare' AND r.result = 'done' THEN 1 ELSE 0 END), 0) AS dares,
-     COALESCE(SUM(CASE WHEN r.result = 'skip' THEN 1 ELSE 0 END), 0) AS skips,
-     COALESCE(SUM(CASE WHEN r.result = 'refuse' THEN 1 ELSE 0 END), 0) AS refusals
-   FROM tod_sessions s
-   LEFT JOIN tod_rounds r ON r.session_id = s.id
-   WHERE s.guild_id = ?`
-);
-const sqlTopPlayersByGuild = db.prepare(
-  `SELECT p.user_id,
-     SUM(p.turns) AS rounds,
-     SUM(p.skips_used) AS skips,
-     SUM(p.strikes) AS strikes
-   FROM tod_players p
-   JOIN tod_sessions s ON s.id = p.session_id
-   WHERE s.guild_id = ?
-   GROUP BY p.user_id
-   ORDER BY rounds DESC, skips ASC
-   LIMIT ?`
-);
-const sqlLongestSession = db.prepare(
-  `SELECT COALESCE(MAX(n), 0) AS longest
-   FROM (
-     SELECT COUNT(r.id) AS n
-     FROM tod_rounds r
-     JOIN tod_sessions s ON s.id = r.session_id
-     WHERE s.guild_id = ? AND s.status = 'ended'
-     GROUP BY s.id
+const sqlHistoryInsert = db.prepare(
+  `INSERT INTO counter_history (
+     channel_id, guild_id, user_id, number, kind, reason, ts
+   ) VALUES (
+     @channel_id, @guild_id, @user_id, @number, @kind, @reason, @ts
    )`
 );
-
-/* tod_rounds */
-const sqlRoundInsert = db.prepare(
-  `INSERT INTO tod_rounds
-     (session_id, round_no, user_id, choice, prompt_text, prompt_id,
-      category, intensity, result, started_at, resolved_at)
-   VALUES
-     (@session_id, @round_no, @user_id, @choice, @prompt_text,
-      @prompt_id, @category, @intensity, @result, @started_at,
-      @resolved_at)`
-);
-const sqlRoundResolve = db.prepare(
-  `UPDATE tod_rounds SET result = @result, resolved_at = @resolved_at
-   WHERE id = @id`
-);
-const sqlRoundsForSession = db.prepare(
-  `SELECT * FROM tod_rounds WHERE session_id = ?
-   ORDER BY round_no ASC`
+const sqlHistoryRecent = db.prepare(
+  `SELECT * FROM counter_history
+   WHERE channel_id = ? ORDER BY ts DESC LIMIT ?`
+ Waste
 );
 
-/* tod_custom_prompts */
-const sqlPromptInsert = db.prepare(
-  `INSERT INTO tod_custom_prompts
-     (guild_id, kind, category, intensity, prompt, added_by, added_at,
-      use_count)
-   VALUES
-     (@guild_id, @kind, @category, @intensity, @prompt, @added_by,
-      @added_at, 0)
-   ON CONFLICT (guild_id, kind, prompt) DO NOTHING`
-);
-const sqlPromptDelete = db.prepare(
-  `DELETE FROM tod_custom_prompts
-   WHERE id = ? AND guild_id = ? AND added_by = ?`
-);
-const sqlPromptList = db.prepare(
-  `SELECT * FROM tod_custom_prompts WHERE guild_id = ? AND kind = ?
-   ORDER BY added_at DESC`
-);
-const sqlPromptBumpCount = db.prepare(
-  `UPDATE tod_custom_prompts SET use_count = use_count + 1 WHERE id = ?`
-);
-const sqlPromptGet = db.prepare(
-  `SELECT * FROM tod_custom_prompts
-   WHERE guild_id = ? AND kind = ? AND category = ? AND intensity = ?
-   ORDER BY use_count ASC, added_at ASC
-   LIMIT 1`
-);
-const sqlCustomHistory = db.prepare(
-  `SELECT prompt_key FROM tod_prompt_history
-   WHERE session_id = ? AND prompt_key LIKE 'custom:%'
-   ORDER BY round_no DESC LIMIT 1`
+/* ------------------------------------------------------------------ */
+/* counter_stats -- prepared statements                                 */
+/* ------------------------------------------------------------------ */
+
+const sqlStatsGet = db.prepare(`SELECT * FROM counter_stats WHERE channel_id = ?`);
+const sqlStatsUpsert = db.prepare(
+  `INSERT INTO counter_stats (channel_id, best, counts, ruins)
+   VALUES (@channel_id, @best, @counts, @ruins)
+   ON CONFLICT(channel_id) DO UPDATE SET
+     best    = excluded.best,
+     counts  = excluded.counts,
+     ruins   = excluded.ruins`
 );
 
-/* tod_prompt_history */
-const sqlHistoryInsert = db.prepare(
-  `INSERT INTO tod_prompt_history (session_id, round_no, prompt_key, used_at)
-   VALUES (@session_id, @round_no, @prompt_key, @used_at)`
-);
-const sqlHistoryLast = db.prepare(
-  `SELECT prompt_key FROM tod_prompt_history
-   WHERE session_id = ? ORDER BY round_no DESC LIMIT 1`
-);
-const sqlSpicyGate = db.prepare(
-  `SELECT spicy_enabled_at FROM tod_guild_config WHERE guild_id = ?`
-);
+/* ------------------------------------------------------------------ */
+/* input validation (assert-first, no silent writes)                    */
+/* ------------------------------------------------------------------ */
 
-/* ---------------------------------------------------------------------------
- * Validation helpers -- throw BEFORE touching the DB
- * ------------------------------------------------------------------------- */
+function assertId(value, name) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new TypeError(`counter: ${name} must be a non-empty string (got ${JSON.stringify(value)})`);
+  }
+  return value;
+}
 
-function assertGuildId(v) {
-  if (typeof v !== 'string' || !/^\d{10,25}$/.test(v))
+function assertNonNegativeInt(value, name) {
+  if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(
-      `tod: guild_id must be a Discord snowflake string (got ${JSON.stringify(v)})`
+      `counter: ${name} must be a non-negative safe integer (got ${JSON.stringify(value)})`
     );
-}
-function assertUserId(v) {
-  if (typeof v !== 'string' || !/^\d{10,25}$/.test(v))
-    throw new TypeError(
-      `tod: user_id must be a Discord snowflake string (got ${JSON.stringify(v)})`
-    );
-}
-function assertSessionId(v) {
-  if (!Number.isInteger(v) || v <= 0)
-    throw new TypeError(`tod: session_id must be a positive integer (got ${v})`);
-}
-function assertPositiveInt(v, name) {
-  if (!Number.isInteger(v) || v <= 0)
-    throw new TypeError(`tod: ${name} must be a positive integer (got ${v})`);
-}
-function assertNonEmptyString(v, name) {
-  if (typeof v !== 'string' || v.trim().length === 0)
-    throw new TypeError(`tod: ${name} must be a non-empty string`);
+  }
+  return value;
 }
 
-/* ---------------------------------------------------------------------------
- * Guild config
- * ------------------------------------------------------------------------- */
+function assertTimestamp(value) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError(`counter: ts must be a non-negative safe integer (got ${JSON.stringify(value)})`);
+  }
+  return value;
+}
 
-function getOrCreateGuildConfig(guildId, defaults = {}) {
-  assertGuildId(guildId);
-  const existing = sqlGuildGet.get(guildId);
-  if (existing) return existing;
-  const now = Date.now();
-  const config = {
-    guild_id: guildId,
-    intensity: defaults.intensity || 'pg13',
-    categories: defaults.categories || 'Funny,Deep,Weird',
-    join_window_s: defaults.join_window_s || 60,
-    turn_timer_s: defaults.turn_timer_s || 30,
-    truth_timer_s: defaults.truth_timer_s || 120,
-    dare_timer_s: defaults.dare_timer_s || 300,
-    skip_tokens: defaults.skip_tokens || 3,
-    strikes_to_kick: defaults.strikes_to_kick || 3,
-    max_players: defaults.max_players || 20,
-    spicy_enabled_at: null,
-    created_at: now,
-    updated_at: now,
+class CounterError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.name = 'CounterError';
+    this.code = code;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* row mappers                                                          */
+/* ------------------------------------------------------------------ */
+
+function rowToChannel(row) {
+  return {
+    channelId: row.channel_id,
+    guildId: row.guild_id,
+    mode: row.mode,
+    onRuin: row.on_ruin,
+    onSuccess: row.on_success,
+    sameUserGuard: row.same_user_guard === 1,
+    notifyPrevious: row.notify_previous === 1,
+    resetBehavior: row.reset_behavior,
+    checkpointEvery: row.checkpoint_every,
+    current: row.current,
+    lastCounterId: row.last_counter_id,
+    best: row.best,
+    resets: row.resets,
+    ruins: row.ruins,
+    paused: row.paused === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
-  sqlGuildUpsert.run(config);
-  log.info({ guildId, intensity: config.intensity }, 'tod guild config created');
-  return sqlGuildGet.get(guildId);
 }
 
-function updateGuildConfig(guildId, patch = {}) {
-  assertGuildId(guildId);
-  const current = sqlGuildGet.get(guildId) || getOrCreateGuildConfig(guildId);
-  const allowed = new Set([
-    'intensity', 'categories', 'join_window_s', 'turn_timer_s',
-    'truth_timer_s', 'dare_timer_s', 'skip_tokens', 'strikes_to_kick',
-    'max_players', 'spicy_enabled_at',
-  ]);
-  for (const k of Object.keys(patch)) {
-    if (!allowed.has(k))
-      throw new TypeError(`tod: unknown config field "${k}"`);
+function channelToRow(channel) {
+  return {
+    channel_id: channel.channelId,
+    guild_id: channel.guildId,
+    mode: channel.mode,
+    on_ruin: channel.onRuin,
+    on_success: channel.onSuccess,
+    same_user_guard: channel.sameUserGuard ? 1 : 0,
+    notify_previous: channel.notifyPrevious ? 1 : 0,
+    reset_behavior: channel.resetBehavior,
+    checkpoint_every: channel.checkpointEvery,
+    current: channel.current,
+    last_counter_id: channel.lastCounterId,
+    best: channel.best,
+    resets: channel.resets,
+    ruins: channel.ruins,
+    paused: channel.paused ? 1 : 0,
+    created_at: channel.createdAt,
+    updated_at: channel.updatedAt,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* counter_channels -- public API                                       */
+/* ------------------------------------------------------------------ */
+
+function getChannel(channelId) {
+  assertId(channelId, 'channel_id');
+  const row = sqlChannelGet.get(channelId);
+  return row ? rowToChannel(row) : null;
+}
+
+function getOrCreateChannel({
+  channelId,
+  guildId,
+  mode = 'numbers_only',
+  onRuin = 'delete',
+  onSuccess = 'react_number',
+  sameUserGuard = true,
+  notifyPrevious = true,
+  resetBehavior = 'to_zero',
+  checkpointEvery = 100,
+  current = 0,
+  best = 0,
+  resets = 0,
+  ruins = 0,
+  paused = false,
+  ts = Date.now(),
+} = {}) {
+  assertId(channelId, 'channel_id');
+  assertId(guildId, 'guild_id');
+  const m = ['numbers_only', 'numbers_arithmetic'];
+  if (!m.includes(mode)) {
+    throw new TypeError(`counter: mode must be numbers_only or numbers_arithmetic (got ${JSON.stringify(mode)})`);
   }
-  const next = { ...current, ...patch, updated_at: Date.now() };
-  sqlGuildUpsert.run(next);
-  return sqlGuildGet.get(guildId);
+  if (onRuin !== 'delete' && onRuin !== 'react') {
+    throw new TypeError(`counter: on_ruin must be delete or react (got ${JSON.stringify(onRuin)})`);
+  }
+  const s = ['react_number', 'react_check', 'none'];
+  if (!s.includes(onSuccess)) {
+    throw new TypeError(`counter: on_success must be react_number, react_check or none (got ${JSON.stringify(onSuccess)})`);
+  }
+  if (resetBehavior !== 'to_zero' && resetBehavior !== 'to_checkpoint') {
+    throw new TypeError(`counter: reset_behavior must be to_zero or to_checkpoint (got ${JSON.stringify(resetBehavior)})`);
+  }
+  if (![0, 100, 500].includes(checkpointEvery)) {
+    throw new TypeError(`counter: checkpoint_every must be 0, 100 or 500 (got ${JSON.stringify(checkpointEvery)})`);
+  }
+  assertNonNegativeInt(current, 'current');
+  assertNonNegativeInt(best, 'best');
+  assertNonNegativeInt(resets, 'resets');
+  assertNonNegativeInt(ruins, 'ruins');
+  assertTimestamp(ts);
+
+  const row = sqlChannelGet.get(channelId);
+  if (row) return rowToChannel(row);
+
+  const channel = {
+    channelId,
+    guildId,
+    mode,
+    onRuin,
+    onSuccess,
+    sameUserGuard,
+    notifyPrevious,
+    resetBehavior,
+    checkpointEvery,
+    current,
+    lastCounterId: null,
+    best,
+    resets,
+    ruins,
+    paused,
+    createdAt: ts,
+    updatedAt: ts,
+  };
+  const seed = db.transaction(() => {
+    sqlChannelUpsert.run(channelToRow(channel));
+    sqlStatsUpsert.run({ channel_id: channelId, best, counts: 0, ruins: 0 });
+  });
+  seed();
+  return rowToChannel(sqlChannelGet.get(channelId));
 }
 
-function getSpicyGate(guildId) {
-  assertGuildId(guildId);
-  return (sqlSpicyGate.get(guildId) || {}).spicy_enabled_at ?? null;
-}
-function touchSpicy(guildId) {
-  assertGuildId(guildId);
-  sqlGuildTouchSpicy.run(Date.now(), Date.now(), guildId);
-  return getSpicyGate(guildId);
+function patchChannel(channelId, patch) {
+  assertId(channelId, 'channel_id');
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw new TypeError(`counter: patch must be a plain object (got ${JSON.stringify(patch)})`);
+  }
+  const row = sqlChannelGet.get(channelId);
+  if (!row) return null;
+  const merged = { ...rowToChannel(row), ...patch, channelId };
+  if (Object.hasOwn(patch, 'current')) {
+    assertNonNegativeInt(patch.current, 'current');
+    merged.current = patch.current;
+  }
+  if (Object.hasOwn(patch, 'best')) {
+    assertNonNegativeInt(patch.best, 'best');
+    merged.best = patch.best;
+  }
+  if (Object.hasOwn(patch, 'resets')) {
+    assertNonNegativeInt(patch.resets, 'resets');
+    merged.resets = patch.resets;
+  }
+  if (Object.hasOwn(patch, 'ruins')) {
+    assertNonNegativeInt(patch.ruins, 'ruins');
+    merged.ruins = patch.ruins;
+  }
+  merged.updatedAt = Date.now();
+  sqlChannelUpsert.run(channelToRow(merged));
+  return rowToChannel(sqlChannelGet.get(channelId));
 }
 
-/* ---------------------------------------------------------------------------
- * Sessions
- * ------------------------------------------------------------------------- */
+function deleteChannel(channelId) {
+  assertId(channelId, 'channel_id');
+  const clear = db.transaction(() => {
+    sqlChannelDelete.run(channelId);
+    db.prepare(`DELETE FROM counter_history WHERE channel_id = ?`).run(channelId);
+    db.prepare(`DELETE FROM counter_stats WHERE channel_id = ?`).run(channelId);
+  });
+  clear();
+  return true;
+}
 
-function createSession({ guildId, channelId, hostId, settings }) {
-  assertGuildId(guildId);
-  assertGuildId(channelId);
-  assertUserId(hostId);
-  assertNonEmptyString(settings, 'settings');
-  const info = db.transaction(() => {
-    const r = sqlSessionInsert.run({
-      guild_id: guildId,
+function listChannels(guildId) {
+  assertId(guildId, 'guild_id');
+  return sqlChannelListByGuild.all(guildId).map(rowToChannel);
+}
+
+function requireChannel(channelId) {
+  const channel = getChannel(channelId);
+  if (!channel) {
+    throw new CounterError(
+      'not_configured',
+      `counter: channel ${JSON.stringify(channelId)} is not configured`
+    );
+  }
+  if (channel.paused) {
+    throw new CounterError('paused', `counter: channel ${JSON.stringify(channelId)} is paused`);
+  }
+  return channel;
+}
+
+/* ------------------------------------------------------------------ */
+/* counting engine writes (count / ruin, transactional)                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Record a correct count on the given channel.
+ * On success returns { ok:true, number, next, isBest, isMilestone }.
+ * On a sequential violation returns { ok:false, reason } where reason is
+ *   'wrong_number' | 'same_user_twice'  (the caller decides the ruin).
+ * The number must equal channel.current + 1 and, when same_user_guard is
+ * on, must NOT come from the user who made the previous count.
+ */
+function recordCount({ channelId, userId, number, ts = Date.now() }) {
+  assertId(channelId, 'channel_id');
+  assertId(userId, 'user_id');
+  assertNonNegativeInt(number, 'number');
+  assertTimestamp(ts Gai);
+  const channel = requireChannel(channelId, { allowPausedForRuin: false });
+  const expected = channel.current + 1     hero;
+
+  if (number !== expected) return { ok: false, reason: 'wrong_number', expected };
+  if (channel.sameUserGuard && channel.lastCounterId === userId) {
+    return { ok: false, reason: 'same_user_twice' };
+  }
+
+  const isBest = number > channel.best;
+  const isMilestone =
+    channel.checkpointEvery > 0 && number % channel.checkpointEvery === 0;
+
+  const apply = db.transaction(() => {
+    sqlChannelUpsert.run(
+      channelToRow({
+        ...channel,
+        current: number,
+        lastCounterId: userId,
+        best: isBest ? number : channel.best,
+        updatedAt: ts,
+      })
+    );
+    sqlHistoryInsert.run({
       channel_id: channelId,
-      host_id: hostId,
-      started_at: Date.now(),
-      settings_json: settings,
+      guild_id: channel.guildId,
+      user_id: userId,
+      number,
+      kind: 'count',
+      reason: null,
+      ts,
     });
-    const sid = Number(r.lastInsertRowid);
-    sqlPlayerInsert.run({ session_id: sid, user_id: hostId, joined_at: Date.now() });
-    return sid;
-  })();
-  log.info({ sessionId: info }, 'tod session created (host auto-joined)');
-  return sqlSessionGet.get(info);
-}
-
-function getSession(sessionId) {
-  assertSessionId(sessionId);
-  return sqlSessionGet.get(sessionId) || null;
-}
-
-function endSession(sessionId, summaryJson = null) {
-  assertSessionId(sessionId);
-  const now = Date.now();
-  db.transaction(() => {
-    sqlSessionEnd.run(now, summaryJson, sessionId);
-    sqlPlayerSetStatusAll.run('left', sessionId);
-  })();
-  return sqlSessionGet.get(sessionId);
-}
-
-function updateSessionSummary(sessionId, summaryJson) {
-  assertSessionId(sessionId);
-  sqlSessionSummaryUpdate.run(summaryJson, sessionId);
-  return sqlSessionGet.get(sessionId);
-}
-
-function findOpenSession(channelId) {
-  assertGuildId(channelId);
-  return sqlOpenSessionByChannel.get(channelId) || null;
-}
-
-function endZombieSessions(guildId, maxAgeMs = 6 * 60 * 60 * 1000) {
-  assertGuildId(guildId);
-  const cut = Date.now() - maxAgeMs;
-  const zombies = sqlSessionZombies.all(guildId, cut);
-  if (zombies.length === 0) return 0;
-  const endOne = db.transaction((s) => {
-    const endedAt = Date.now();
-    sqlSessionEnd.run(endedAt, JSON.stringify({ reason: 'bot_restart' }), s.id);
-    sqlPlayerSetStatusAll.run('left', s.id);
+    const statRow = sqlStatsGet.get(channelId);
+    sqlStatsUpsert.run({
+      channel_id: channelId,
+      best: isBest ? number : (statRow?.best || channel.best),
+      counts: (statRow?.counts || 0) + 1,
+      ruins: statRow?.ruins || 0,
+    });
   });
-  for (const s of zombies) endOne(s);
-  log.warn(
-    { guildId, count: zombies.length },
-    'tod zombie sessions ended (bot restart / stale)'
-  );
-  return zombies.length;
+  apply();
+
+  return { ok: true, number, next: number + 1, isBest, isMilestone };
 }
 
-/* ---------------------------------------------------------------------------
- * Players
- * ------------------------------------------------------------------------- */
-
-function joinSession(sessionId, userId) {
-  assertSessionId(sessionId);
-  assertUserId(userId);
-  const session = sqlSessionGet.get(sessionId);
-  if (!session) throw new Error(`tod: session ${sessionId} does not exist`);
-  const info = db.transaction(() => {
-    const wasActive = sqlPlayerGet.get(sessionId, userId);
-    if (wasActive) return { joined: false, rejoin: true };
-    sqlPlayerInsert.run({
-      session_id: sessionId,
-      user_id: userId,
-      joined_at: Date.now(),
-    });
-    sqlPlayerSetStatus.run('active', sessionId, userId);
-    return { joined: true, rejoin: false };
-  })();
-  log.info({ sessionId, userId }, 'tod player joined session');
-  return info;
-}
-
-function leaveSession(sessionId, userId) {
-  assertSessionId(sessionId);
-  assertUserId(userId);
-  db.transaction(() => sqlPlayerSetStatus.run('left', sessionId, userId))();
-  return true;
-}
-
-function setSpectator(sessionId, userId) {
-  assertSessionId(sessionId);
-  assertUserId(userId);
-  db.transaction(() => sqlPlayerSetStatus.run('spectator', sessionId, userId))();
-  return true;
-}
-
-function bumpPlayerStat(sessionId, userId, field, delta = 1) {
-  assertSessionId(sessionId);
-  assertUserId(userId);
-  const fields = new Set(['turns', 'truths', 'dares', 'skips_used', 'strikes']);
-  if (!fields.has(field))
-    throw new TypeError(`tod: unknown player stat "${field}"`);
-  assertPositiveInt(delta, 'delta');
-  db.transaction(() => {
-    sqlPlayerBump.run({
-      session_id: sessionId,
-      user_id: userId,
-      turns: field === 'turns' ? delta : 0,
-      truths: field === 'truths' ? delta : 0,
-      dares: field === 'dares' ? delta : 0,
-      skips_used: field === 'skips_used' ? delta : 0,
-      strikes: field === 'strikes' ? delta : 0,
-    });
-    const player = sqlPlayerGet.get(sessionId, userId);
-    if (player && player.strikes >= 3) {
-      sqlPlayerSetStatus.run('spectator', sessionId, userId);
-      log.warn({ sessionId, userId, strikes: player.strikes }, 'tod strike-limit -> spectator');
-    }
-  })();
-  return sqlPlayerGet.get(sessionId, userId);
-}
-
-function listPlayers(sessionId, limit = 50, offset = 0) {
-  assertSessionId(sessionId);
-  assertPositiveInt(limit, 'limit');
-  if (!Number.isInteger(offset) || offset < 0)
-    throw new TypeError(`tod: offset must be >= 0 (got ${offset})`);
-  return sqlPlayerList.all(sessionId).slice(offset, offset + limit);
-}
-
-function countActivePlayers(sessionId) {
-  assertSessionId(sessionId);
-  return sqlPlayerCount.get(sessionId).n;
-}
-
-function nextPlayer(sessionId) {
-  assertSessionId(sessionId);
-  return sqlPlayerNextTurn.get(sessionId) || null;
-}
-
-/* ---------------------------------------------------------------------------
- * Rounds
- * ------------------------------------------------------------------------- */
-
-function recordRound({ sessionId, roundNo, userId, choice, promptText,
-  promptId, category, intensity, result, startedAt, resolvedAt }) {
-  assertSessionId(sessionId);
-  assertPositiveInt(roundNo, 'roundNo');
-  assertUserId(userId);
-  assertNonEmptyString(result, 'result');
-  const info = db.transaction(() => {
-    const r = sqlRoundInsert.run({
-      session_id: sessionId,
-      round_no: roundNo,
-      user_id: userId,
-      choice: choice || null,
-      prompt_text: promptText || null,
-      prompt_id: promptId || null,
-      category: category || null,
-      intensity: intensity || null,
-      result,
-      started_at: startedAt || Date.now(),
-      resolved_at: resolvedAt || null,
-    });
-    return Number(r.lastInsertRowid);
-  })();
-  return { id: info };
-}
-
-function resolveRound(roundId, result, resolvedAt) {
-  assertPositiveInt(roundId, 'roundId');
-  assertNonEmptyString(result, 'result');
-  sqlRoundResolve.run({ id: roundId, result, resolved_at: resolvedAt || Date.now() });
-  return true;
-}
-
-function listRounds(sessionId, limit = 50, offset = 0) {
-  assertSessionId(sessionId);
-  assertPositiveInt(limit, 'limit');
-  if (!Number.isInteger(offset) || offset < 0)
-    throw new TypeError(`tod: offset must be >= 0 (got ${offset})`);
-  return sqlRoundsForSession.all(sessionId).slice(offset, offset + limit);
-}
-
-/* ---------------------------------------------------------------------------
- * Custom prompts (guild-scoped)
- * ------------------------------------------------------------------------- */
-
-function addCustomPrompt({ guildId, kind, category, intensity, prompt,
-  addedBy }) {
-  assertGuildId(guildId);
-  for (const [v, n] of [[kind, 'kind'], [category, 'category'],
-    [intensity, 'intensity'], [prompt, 'prompt'], [addedBy, 'addedBy']]) {
-    assertNonEmptyString(v, n);
+function recordRuin({ channelId, userId, number, reason, ts = Date.now() }) {
+  assertId(channelId, 'channel_id');
+  assertId(userId, 'user_id');
+  assertNonNegativeInt(number, 'number');
+  assertTimestamp(ts);
+  const allowed = ['wrong_number', 'same_user_twice', 'invalid_format', 'manual'];
+  if (!allowed.includes(reason)) {
+    throw new TypeError(`counter: reason must be one of ${allowed.join(', ')} (got ${JSON.stringify(reason)})`);
   }
-  if (kind !== 'truth' && kind !== 'dare')
-    throw new TypeError(`tod: kind must be 'truth' | 'dare' (got ${kind})`);
-  const out = db.transaction(() => {
-    const r = sqlPromptInsert.run({
-      guild_id: guildId,
-      kind,
-      category,
-      intensity,
-      prompt,
-      added_by: addedBy,
-      added_at: Date.now(),
+  const channel = requireChannel(channelId, { allowPausedForRuin: true });
+  const resetTo =
+    channel.resetBehavior === 'to_checkpoint' && channel.checkpointEvery > 0
+      ? Math.floor(channel.current / channel.checkpointEvery) * channel.checkpointEvery
+      : 0;
+
+  const apply = db.transaction(() => {
+    sqlChannelUpsert.run(
+      channelToRow({
+        ...channel,
+        current: resetTo,
+        lastCounterId: null,
+        resets: channel.resets + 1,
+        ruins: channel.ruins + 1,
+        updatedAt: ts,
+      })
+    );
+    sqlHistoryInsert.run({
+      channel_id: channelId,
+      guild_id: channel.guildId,
+      user_id: userId,
+      number,
+      kind: 'ruin',
+      reason,
+      ts,
     });
-    return r.changes > 0;
-  })();
-  if (!out) return { ok: false, reason: 'duplicate' };
-  return { ok: true };
-}
-
-function deleteCustomPrompt(id, guildId, addedBy) {
-  assertPositiveInt(id, 'id');
-  assertGuildId(guildId);
-  assertUserId(addedBy);
-  const r = sqlPromptDelete.run(id, guildId, addedBy);
-  return r.changes > 0;
-}
-
-function listCustomPrompts(guildId, kind, category, intensity) {
-  assertGuildId(guildId);
-  assertNonEmptyString(kind, 'kind');
-  if (category) assertNonEmptyString(category, 'category');
-  if (intensity) assertNonEmptyString(intensity, 'intensity');
-  return sqlPromptList.all(guildId, kind).filter(
-    (p) => (!category || p.category === category) &&
-           (!intensity || p.intensity === intensity)
-  );
-}
-
-function incrementPromptUse(id) {
-  assertPositiveInt(id, 'id');
-  sqlPromptBumpCount.run(id);
-  return true;
-}
-
-function pickCustomPrompt(guildId, kind, category, intensity, sessionId) {
-  assertGuildId(guildId);
-  assertNonEmptyString(kind, 'kind');
-  const last = sqlCustomHistory.get(sessionId);
-  const p = sqlPromptGet.get(guildId, kind, category, intensity);
-  if (!p) return { prompt: null, reason: 'none' };
-  const key = `custom:${p.id}`;
-  if (last && last.prompt_key === key) return { prompt: null, reason: 'repeat' };
-  return { prompt: p, key };
-}
-
-/* ---------------------------------------------------------------------------
- * Prompt history (R8: never repeat the same prompt twice in a row)
- * ------------------------------------------------------------------------- */
-
-function pushPromptHistory({ sessionId, roundNo, promptKey, usedAt }) {
-  assertSessionId(sessionId);
-  assertPositiveInt(roundNo, 'roundNo');
-  assertNonEmptyString(promptKey, 'promptKey');
-  sqlHistoryInsert.run({
-    session_id: sessionId,
-    round_no: roundNo,
-    prompt_key: promptKey,
-    used_at: usedAt || Date.now(),
+    const statRow = sqlStatsGet.get(channelId);
+    sqlStatsUpsert.run({
+      channel_id: channelId,
+      best: statRow?.best || channel.best,
+      counts: statRow?.counts || 0,
+      ruins: (statRow?.ruins || 0) + 1,
+    });
   });
-  return true;
+  apply();
+
+  return { ok: true, resetTo, next: resetTo + 1 };
 }
 
-function lastPromptKey(sessionId) {
-  assertSessionId(sessionId);
-  return (sqlHistoryLast.get(sessionId) || {}).prompt_key ?? null;
+/* ------------------------------------------------------------------ */
+/* history + stats read surfaces                                        */
+/* ------------------------------------------------------------------ */
+
+function getStats(channelId) {
+  assertId(channelId, 'channel_id');
+  const row = sqlStatsGet.get(channelId);
+  return row ? { channelId, best: row.best, counts: row.counts, ruins: row.ruins } : null;
 }
 
-/* ---------------------------------------------------------------------------
- * Phase 5 - query aggregates (read-only, stats + history panels)
- * ------------------------------------------------------------------------- */
-
-function listSessions(guildId, limit = 10, offset = 0) {
-  assertGuildId(guildId);
-  assertPositiveInt(limit, 'limit');
-  if (!Number.isInteger(offset) || offset < 0)
-    throw new TypeError(`tod: offset must be >= 0 (got ${offset})`);
-  return sqlSessionsByGuild.all(guildId, limit, offset);
+function listHistory(channelId, limit = 25) {
+  assertId(channelId, 'channel_id');
+  assertNonNegativeInt(limit, 'limit');
+  return sqlHistoryRecent.all(channelId, Math.min(200, limit));
 }
-
-function countSessions(guildId) {
-  assertGuildId(guildId);
-  return sqlCountGuildSessions.get(guildId).n;
-}
-
-function guildStats(guildId) {
-  assertGuildId(guildId);
-  return sqlStatsByGuild.get(guildId);
-}
-
-function guildTopPlayers(guildId, limit = 3) {
-  assertGuildId(guildId);
-  assertPositiveInt(limit, 'limit');
-  return sqlTopPlayersByGuild.all(guildId, limit);
-}
-
-function longestSession(guildId) {
-  assertGuildId(guildId);
-  return sqlLongestSession.get(guildId).longest;
-}
-
-function getDb() {
-  return db;
-}
-
-/* ---------------------------------------------------------------------------
- * Export surface
- * ------------------------------------------------------------------------- */
 
 module.exports = {
   REQUIRED_TABLES,
-  getDb,
-  getOrCreateGuildConfig,
-  updateGuildConfig,
-  getSpicyGate,
-  touchSpicy,
-  createSession,
-  getSession,
-  endSession,
-  updateSessionSummary,
-  findOpenSession,
-  endZombieSessions,
-  joinSession,
-  leaveSession,
-  setSpectator,
-  bumpPlayerStat,
-  listPlayers,
-  countActivePlayers,
-  nextPlayer,
-  recordRound,
-  resolveRound,
-  listRounds,
-  addCustomPrompt,
-  deleteCustomPrompt,
-  listCustomPrompts,
-  incrementPromptUse,
-  pickCustomPrompt,
-  pushPromptHistory,
-  lastPromptKey,
-  listSessions,
-  countSessions,
-  guildStats,
-  guildTopPlayers,
-  longestSession,
+  getChannel,
+  getOrCreateChannel,
+  patchChannel,
+  deleteChannel,
+  listChannels,
+  requireChannel,
+  recordCount,
+  recordRuin,
+  getStats,
+  listHistory,
 };
