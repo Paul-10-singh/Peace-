@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /*
  * Peace* -- Discord Bot -- Developed by Smith.Code
  *
@@ -15,7 +15,7 @@
  *   onMilestone({channelId, number, channel})
  *     -> { reached:bool, embed?, nextMilestone? }
  *
- * Engine idiom mirrors tod/game.js EXACTLY:
+ * Engine idiom:
  *   - validates EVERY input first (TypeError), never writes on junk
  *   - PURE decision layer: returns a decision object, performs NO
  *     db writes itself -- the caller (event handler / command) owns

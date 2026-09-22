@@ -1,10 +1,10 @@
-'use strict';
+﻿'use strict';
 /* * Peace* -- * Discord Bot -- Developed by Smith.Code *
  * Counter module -- db.js (Deliverable 2)
  *
  * SQLite bootstrap + handle. OWNER of the connection only; store.js owns
  * every query. Require store.js (it re-exports `db`), never require both —
- * same boot contract as the ToD module's tod/db.js (mirrored verbatim):
+ * same boot contract as the counter db module (mirrored verbatim):
  *
  * Boot contract (in this exact order):
  *   1. better-sqlite3 is a HARD dependency. Missing -> fail loud with

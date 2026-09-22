@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /*
  * Peace* -- Discord Bot -- Developed by Smith.Code
  *
@@ -9,10 +9,10 @@
  *   counter_history    append-only audit of counts / ruins / resets
  *   counter_stats     per-channel rollups (best / counts / ruins)
  *
- * Idiom mirrors tod/store.js EXACTLY:
+ * Idiom: prepared statements, same boot contract as the counter store:
  *   - This module does NOT own the db handle open/close/PRAGMA/WAL
  *     (db.js owns open()), it only opens one handle on require like
- *     tod/store.js does, then works with prepared statements.
+ *     the canonical store does, then works with prepared statements.
  *   - Every public function validates its inputs FIRST (assertId /
  *     assertPositiveInt / assertNonEmptyString...) and throws a
  *     TypeError with a counter-prefixed message on bad input -- NO
