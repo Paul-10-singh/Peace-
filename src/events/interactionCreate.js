@@ -228,6 +228,13 @@ module.exports = {
       return;
     }
 
+    if (interaction.isChannelSelectMenu()) {
+      // Acknowledge stale or unsupported channel selects instead of leaving
+      // them spinning until Discord reports an interaction timeout.
+      await interaction.deferUpdate().catch(() => {});
+      return;
+    }
+
     if (interaction.isAutocomplete()) {
       const command = client.commands.get(interaction.commandName);
       if (!command?.autocomplete) return;
