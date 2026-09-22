@@ -98,6 +98,11 @@ const sqlSessionZombies = db.prepare(
 const sqlSessionSummaryUpdate = db.prepare(
   `UPDATE tod_sessions SET summary_json = ? WHERE id = ?`
 );
+const sqlOpenSessionByChannel = db.prepare(
+  `SELECT * FROM tod_sessions
+   WHERE channel_id = ? AND status IN ('lobby', 'active')
+   ORDER BY started_at DESC LIMIT 1`
+);
 
 /* tod_players */
 const sqlPlayerInsert = db.prepare(
@@ -137,6 +142,62 @@ const sqlPlayerNextTurn = db.prepare(
 );
 const sqlPlayerSetStatusAll = db.prepare(
   `UPDATE tod_players SET status = ? WHERE session_id = ?`
+);
+
+/* tod_rounds prompt fill-in (present a prompt on an open round) */
+const sqlRoundSetPrompt = db.prepare(
+  `UPDATE tod_rounds SET
+      choice = @choice, prompt_text = @prompt_text, prompt_id = @prompt_id,
+      category = @category, intensity = @intensity
+   WHERE id = @id`
+);
+
+/* Phase 5 - read-only aggregates (stats panel + history panel) */
+const sqlSessionsByGuild = db.prepare(
+  `SELECT s.*, COUNT(p.user_id) AS player_count
+   FROM tod_sessions s
+   LEFT JOIN tod_players p ON p.session_id = s.id
+   WHERE s.guild_id = ?
+   GROUP BY s.id
+   ORDER BY s.started_at DESC
+   LIMIT ? OFFSET ?`
+);
+const sqlCountGuildSessions = db.prepare(
+  `SELECT COUNT(*) AS n FROM tod_sessions WHERE guild_id = ?`
+);
+const sqlStatsByGuild = db.prepare(
+  `SELECT
+     COUNT(DISTINCT s.id) AS sessions,
+     COUNT(r.id) AS rounds,
+     COALESCE(SUM(CASE WHEN r.choice = 'truth' AND r.result = 'done' THEN 1 ELSE 0 END), 0) AS truths,
+     COALESCE(SUM(CASE WHEN r.choice = 'dare' AND r.result = 'done' THEN 1 ELSE 0 END), 0) AS dares,
+     COALESCE(SUM(CASE WHEN r.result = 'skip' THEN 1 ELSE 0 END), 0) AS skips,
+     COALESCE(SUM(CASE WHEN r.result = 'refuse' THEN 1 ELSE 0 END), 0) AS refusals
+   FROM tod_sessions s
+   LEFT JOIN tod_rounds r ON r.session_id = s.id
+   WHERE s.guild_id = ?`
+);
+const sqlTopPlayersByGuild = db.prepare(
+  `SELECT p.user_id,
+     SUM(p.turns) AS rounds,
+     SUM(p.skips_used) AS skips,
+     SUM(p.strikes) AS strikes
+   FROM tod_players p
+   JOIN tod_sessions s ON s.id = p.session_id
+   WHERE s.guild_id = ?
+   GROUP BY p.user_id
+   ORDER BY rounds DESC, skips ASC
+   LIMIT ?`
+);
+const sqlLongestSession = db.prepare(
+  `SELECT COALESCE(MAX(n), 0) AS longest
+   FROM (
+     SELECT COUNT(r.id) AS n
+     FROM tod_rounds r
+     JOIN tod_sessions s ON s.id = r.session_id
+     WHERE s.guild_id = ? AND s.status = 'ended'
+     GROUP BY s.id
+   )`
 );
 
 /* tod_rounds */
@@ -334,6 +395,13 @@ function updateSessionSummary(sessionId, summaryJson) {
   sqlSessionSummaryUpdate.run(summaryJson, sessionId);
   return sqlSessionGet.get(sessionId);
 }
+
+// The lobby/round buttons (tod:lobby:*, tod:round:*, tod:answer:*) have no
+// ctx id - they live on a public message, so resolve the session by channel.
+function findOpenSession(channelId) {
+  assertGuildId(channelId);
+  return sqlOpenSessionByChannel.get(channelId) || null;
+}
 function endZombieSessions(guildId, maxAgeMs = 6 * 60 * 60 * 1000) {
   assertGuildId(guildId);
   const cut = Date.now() - maxAgeMs;
@@ -341,7 +409,7 @@ function endZombieSessions(guildId, maxAgeMs = 6 * 60 * 60 * 1000) {
   if (zombies.length === 0) return 0;
   const endOne = db.transaction((s) => {
     const endedAt = Date.now();
-    sqlSessionEnd.run(endedAt, JSON.stringify({ ended_by: 'bot_restart' }), s.id);
+    sqlSessionEnd.run(endedAt, JSON.stringify({ reason: 'bot_restart' }), s.id);
     sqlPlayerSetStatusAll.run('left', s.id);
   });
   for (const s of zombies) endOne(s);
@@ -552,11 +620,104 @@ function lastPromptKey(sessionId) {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 3 additions: session start, strike adds (R4 config-driven), prompt fill
+// ---------------------------------------------------------------------------
+
+// Test-only hook: exposes the raw db handle so tests (in-memory) can backdate
+// rows (e.g. age a session for the zombie sweep). Production code never uses it.
+function getDb() {
+  return db;
+}
+
+function startSession(sessionId) {
+  assertSessionId(sessionId);
+  const transaction = db.transaction(() => {
+    sqlSessionSetStatus.run('active', sessionId);
+  });
+  transaction();
+  log.info({ sessionId }, 'tod session started');
+  return sqlSessionGet.get(sessionId);
+}
+
+function addStrikes(sessionId, userId, delta = 1) {
+  assertSessionId(sessionId);
+  assertUserId(userId);
+  assertPositiveInt(delta, 'delta');
+  db.transaction(() => {
+    sqlPlayerBump.run({
+      session_id: sessionId,
+      user_id: userId,
+      turns: 0,
+      truths: 0,
+      dares: 0,
+      skips_used: 0,
+      strikes: delta,
+    });
+    // R4 is enforced here too (config-driven via caller param).
+  })();
+  return sqlPlayerGet.get(sessionId, userId);
+}
+
+function setRoundPrompt(roundId, { choice, promptText, promptId, category,
+  intensity }) {
+  assertPositiveInt(roundId, 'roundId');
+  if (choice !== null && choice !== 'truth' && choice !== 'dare') {
+    throw new TypeError(`tod: choice must be 'truth' | 'dare' | null (got ${choice})`);
+  }
+  // choice is allowed to be null while a round is still open (present).
+  db.transaction(() => {
+    sqlRoundSetPrompt.run({
+      id: roundId,
+      choice: choice === undefined ? null : choice,
+      prompt_text: promptText === undefined ? null : promptText,
+      prompt_id: promptId === undefined ? null : promptId,
+      category: category === undefined ? null : category,
+      intensity: intensity === undefined ? null : intensity,
+    });
+  })();
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 - query aggregates (read-only, stats + history panels)
+// ---------------------------------------------------------------------------
+
+function listSessions(guildId, limit = 10, offset = 0) {
+  assertGuildId(guildId);
+  assertPositiveInt(limit, 'limit');
+  if (!Number.isInteger(offset) || offset < 0)
+    throw new TypeError(`tod: offset must be >= 0 (got ${offset})`);
+  return sqlSessionsByGuild.all(guildId, limit, offset);
+}
+
+function countSessions(guildId) {
+  assertGuildId(guildId);
+  return sqlCountGuildSessions.get(guildId).n;
+}
+
+function guildStats(guildId) {
+  assertGuildId(guildId);
+  return sqlStatsByGuild.get(guildId);
+}
+
+function guildTopPlayers(guildId, limit = 3) {
+  assertGuildId(guildId);
+  assertPositiveInt(limit, 'limit');
+  return sqlTopPlayersByGuild.all(guildId, limit);
+}
+
+function longestSession(guildId) {
+  assertGuildId(guildId);
+  return sqlLongestSession.get(guildId).longest;
+}
+
+// ---------------------------------------------------------------------------
 // Export surface
 // ---------------------------------------------------------------------------
 
 module.exports = {
   REQUIRED_TABLES,
+  getDb,
   getOrCreateGuildConfig,
   updateGuildConfig,
   getSpicyGate,
@@ -565,7 +726,11 @@ module.exports = {
   getSession,
   endSession,
   updateSessionSummary,
+  findOpenSession,
   endZombieSessions,
+  startSession,
+  addStrikes,
+  setRoundPrompt,
   joinSession,
   leaveSession,
   setSpectator,
@@ -583,4 +748,9 @@ module.exports = {
   pickCustomPrompt,
   pushPromptHistory,
   lastPromptKey,
+  listSessions,
+  countSessions,
+  guildStats,
+  guildTopPlayers,
+  longestSession,
 };

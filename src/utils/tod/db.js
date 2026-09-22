@@ -33,7 +33,10 @@ const log = pino({
 const DATA_DIR = path.join(__dirname, '..', '..', '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const DB_PATH = path.join(DATA_DIR, 'tod.db');
+// Path override: tests set TOD_DB_PATH=':memory:' BEFORE requiring the
+// store so they never touch the on-disk data/tod.db. An explicit
+// pathOverride to open() wins over the env var.
+const DB_PATH = process.env.TOD_DB_PATH || path.join(DATA_DIR, 'tod.db');
 
 // Exactly the Phase-1 contract tables. <<single source of truth>>
 const REQUIRED_TABLES = [
@@ -45,7 +48,7 @@ const REQUIRED_TABLES = [
   'tod_prompt_history',
 ];
 
-function open() {
+function open(pathOverride) {
   // 1 - hard dependency, fail loud
   let Database;
   try {
@@ -61,7 +64,7 @@ function open() {
     process.exit(1);
   }
 
-  const db = new Database(DB_PATH);
+  const db = new Database(pathOverride || DB_PATH);
 
   // 2 - PRAGMAs, exact order, before any query
   db.pragma('journal_mode = WAL');

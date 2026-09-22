@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "category": "party",
+  "prompts": [
+    { "id": "party-001", "kind": "truth", "intensity": "pg", "text": "What is the best party you have ever been to and what made it unforgettable?" },
+    { "id": "party-002", "kind": "dare", "intensity": "pg", "text": "Give a dramatic toast to the group as if receiving a lifetime achievement award." },
+    { "id": "party-003", "kind": "truth", "intensity": "pg13", "text": "What is the clumsiest thing you have ever done in front of a crowd?" },
+    { "id": "party-004", "kind": "dare", "intensity": "pg", "text": "Start a chant right now and lead the whole room until someone joins you." },
+    { "id": "party-005", "kind": "truth", "intensity": "pg", "text": "What song is guaranteed to make you the life of any party once it plays?" },
+    { "id": "party-006", "kind": "dare", "intensity": "pg", "text": "Show off your best dance move and hold the pose for five seconds." },
+    { "id": "party-007", "kind": "truth", "intensity": "pg13", "text": "What is the most embarrassing thing you have said out loud at a party?" },
+    { "id": "party-008", "kind": "dare", "intensity": "pg", "text": "Take the next drink of water in the most extra way possible and sell it to the group." },
+    { "id": "party-009", "kind": "truth", "intensity": "pg", "text": "Who in this room would survive the longest in a zombie apocalypse and why?" },
+    { "id": "party-010", "kind": "dare", "intensity": "pg13", "text": "Do your best impression of the last person who spoke in the chat." },
+    { "id": "party-011", "kind": "truth", "intensity": "pg", "text": "What is the most spontaneous thing you have ever done?" },
+    { "id": "party-012", "kind": "dare", "intensity": "pg", "text": "Create a quick rap about the group and perform at least four lines of it." },
+    { "id": "party-013", "kind": "truth", "intensity": "pg13", "text": "What is one thing you always do at parties that you hope nobody notices?" },
+    { "id": "party-014", "kind": "dare", "intensity": "pg", "text": "Name three famous people you would want at your dream party and explain why." },
+    { "id": "party-015", "kind": "truth", "intensity": "pg", "text": "If you had to party with a fictional character, who would it be and what would you do?" },
+    { "id": "party-016", "kind": "dare", "intensity": "pg", "text": "Get the whole room to do a synchronized wave with you, starting right now." }
+  ]
+}
