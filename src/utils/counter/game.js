@@ -149,7 +149,7 @@ function buildMilestoneEmbed({ number, nextMilestone, best }) {
 function checkMessage({ channelId, userId, number, channel }) {
   assertId(channelId, 'channelId');
   assertId(userId, 'userId');
-  assertChannel(channel.u8);
+  assertChannel(channel);
 
   if (channel.paused !== 0) {
     return { ok: false, reason: 'paused', ruin: false, delete: false };
