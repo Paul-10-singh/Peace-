@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /* * Peace* -- * Discord Bot -- Developed by Smith.Code *
  * Counter module -- db.js (Deliverable 2)
  *
@@ -68,6 +68,13 @@ function open(pathOverride) {
   // 3 - schema, idempotent
   const schemaSql = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   db.exec(schemaSql);
+
+  // Migration for adding ruins to counter_channels (if not exists)
+  try {
+    db.exec('ALTER TABLE counter_channels ADD COLUMN ruins INTEGER NOT NULL DEFAULT 0;');
+  } catch (e) {
+    // Ignore error if column already exists
+  }
 
   // 4 - drift guard
   const found = db

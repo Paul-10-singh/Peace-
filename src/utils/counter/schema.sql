@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS counter_channels (
   last_counter_id   TEXT,
   best              INTEGER NOT NULL DEFAULT 0,
   resets            INTEGER NOT NULL DEFAULT 0,
+  ruins             INTEGER NOT NULL DEFAULT 0,
   paused            INTEGER NOT NULL DEFAULT 0,
   created_at        INTEGER NOT NULL,
   updated_at        INTEGER NOT NULL
