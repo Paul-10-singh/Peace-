@@ -75,9 +75,11 @@ async function handleVoiceState(client, oldState, newState) {
   //    channel are fine; deletion is guarded against the bot itself).
   if (oldState.channelId && newState.channelId !== oldState.channelId) {
     const oldChannel = guild.channels.cache.get(oldState.channelId);
-    if (oldChannel && oldChannel.name.startsWith('🔊') && oldChannel.members.size === 0) {
-      if (cleaning.has(oldChannel.id)) return;
-      cleaning.add(oldChannel.id);
+    if (oldChannel && oldChannel.members.size === 0) {
+      const room = get(guild.id, 'tempvc').rooms?.[oldChannel.id];
+      if (room) {
+        if (cleaning.has(oldChannel.id)) return;
+        cleaning.add(oldChannel.id);
       try {
         if (oldChannel.members.size === 0) {
           const room = get(guild.id, 'tempvc').rooms?.[oldChannel.id];
@@ -87,8 +89,9 @@ async function handleVoiceState(client, oldState, newState) {
           removeRoom(guild.id, oldChannel.id);
           await oldChannel.delete('Temp VC idle').catch(() => null);
         }
-      } finally {
-        cleaning.delete(oldChannel.id);
+        } finally {
+          cleaning.delete(oldChannel.id);
+        }
       }
     }
   }
