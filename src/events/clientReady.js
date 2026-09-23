@@ -57,5 +57,19 @@ module.exports = {
     } catch (err) {
       console.error(`[PeaceX] [vcTracker] Failed to start: ${err.message}`);
     }
+
+    // Trigger AutoMod API to earn the "Uses AutoMod" badge on Discord
+    try {
+      let fetched = 0;
+      for (const guild of client.guilds.cache.values()) {
+        if (fetched >= 3) break;
+        if (guild.members.me?.permissions.has('ManageGuild')) {
+          await guild.autoModerationRules.fetch().catch(() => {});
+          fetched++;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
   },
 };
