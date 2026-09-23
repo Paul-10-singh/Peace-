@@ -91,6 +91,7 @@ Context menu (Owner): right-click a message → `Translate Message` (Google tran
 /channel hide / show [channel]	Hide / show any channel from @everyone
 /channel nsfw enabled:<bool> [channel]	Toggle NSFW on a text channel
 /channel slowmode seconds:<0-21600> [channel]	Set channel slowmode
+/channel status vc:<vc> name:<name>	Set a custom status for a voice channel
 
 ## 👑 Owner — Roles
 
@@ -114,6 +115,7 @@ Context menu (Owner): right-click a message → `Translate Message` (Google tran
 /leaveserver guild_id:<id>	Make the bot leave a server
 /serverlist	List every server the bot is in
 /backup	Export server structure + bot settings as JSON
+/namestyle	Customize how the bot's name appears (font, color)
 
 Owners stored in data/owners.json. Extra owners (via /extraowner add) get full Tier 2 + Tier 3 access in the current server only. Only the main owner edits the owner list.
 
@@ -171,6 +173,8 @@ One open ticket per user per category. @everyone denied; creator + staff role al
 /vcrole set role:<role>	Give ONLY that role access to /vc task, /vc custom_stats and /vc chart (owner only; /vc stats stays open to everyone)
 /vcrole remove	Remove the role restriction → the three commands become owner-only until a role is set again
 /vcrole status	Show the current VC role restriction
+/counter	Setup and manage the premium counting game
+/verification <enable/disable>	Drop an interactive verification panel in the current channel
 
 # 🛠 Owner tools (new)
 

@@ -20,7 +20,6 @@ on:
   - ban
   - kick
   - bot.add
-  - mention.everyone
 steps:
   - name: snapshot_permissions
     critical: true

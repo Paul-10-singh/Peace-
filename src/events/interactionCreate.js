@@ -153,6 +153,32 @@ module.exports = {
         await handleComponent(interaction);
         return;
       }
+      if (interaction.customId === 'namestyle_color') {
+        const { handleNameStyleComponent } = require('../utils/nameStylePanel');
+        await handleNameStyleComponent(interaction);
+        return;
+      }
+      if (interaction.customId === 'server_verify_btn') {
+        const { get } = require('../utils/settings');
+        const config = get(interaction.guild.id, 'verification');
+        
+        if (!config || !config.roleId) {
+          return interaction.reply({ content: '<a:wrong:1550504971303395430> Verification system is currently disabled.', flags: MessageFlags.Ephemeral });
+        }
+
+        const role = interaction.guild.roles.cache.get(config.roleId);
+        if (!role) {
+          return interaction.reply({ content: '<a:wrong:1550504971303395430> The verification role is no longer valid or has been deleted.', flags: MessageFlags.Ephemeral });
+        }
+
+        try {
+          await interaction.member.roles.add(role, 'User verified themselves via panel');
+          return interaction.reply({ content: '<a:correct:1550504846199758928> You have been verified successfully!', flags: MessageFlags.Ephemeral });
+        } catch (err) {
+          console.error(`[PeaceX] [Verification] Could not assign role:`, err.message);
+          return interaction.reply({ content: '<a:wrong:1550504971303395430> I could not assign the verification role. Ensure my role is higher than the verification role.', flags: MessageFlags.Ephemeral });
+        }
+      }
       if (interaction.customId.startsWith('afk_')) {
         await handleAfkButton(interaction);
         return;
@@ -191,6 +217,10 @@ module.exports = {
       if (interaction.customId === 'note_add' || interaction.customId.startsWith('note_edit_')) {
         await handleNoteModal(interaction);
       }
+      if (interaction.customId === 'namestyle_modal') {
+        const { handleNameStyleModal } = require('../utils/nameStylePanel');
+        await handleNameStyleModal(interaction);
+      }
       if (interaction.customId.startsWith('tempvc:modal:')) {
         const { handleModal } = require('../utils/tempvcPanel');
         await handleModal(interaction).catch(() => {});
@@ -199,6 +229,11 @@ module.exports = {
     }
 
     if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === 'namestyle_font') {
+        const { handleNameStyleComponent } = require('../utils/nameStylePanel');
+        await handleNameStyleComponent(interaction);
+        return;
+      }
       if (interaction.customId.startsWith('sec:')) {
         const { handleComponent } = require('../utils/securityPanel');
         await handleComponent(interaction);

@@ -158,32 +158,7 @@ module.exports = {
       await gateway.onBotAdd(client, member);
     },
 
-    // ── Anti @everyone / @here ──────────────────────────────────────────
-    messageCreate: async (client, message) => {
-      if (!message.guild || message.author.bot) return;
-      if (!message.mentions.everyone) return;
-      const cfg = get(message.guild.id, 'security');
-      if (!cfg.antiNuke?.enabled) return;
-
-      const member = message.member;
-      if (member?.permissions?.has(PermissionsBitField.Flags.MentionEveryone)) return;
-
-      const gateway = require('../security/gateway');
-      await message.delete().catch(() => {});
-      const decision = await gateway.onAuditEvent(client, {
-        guild: message.guild,
-        capability: 'mention.everyone',
-        label: '@everyone/@here mention',
-        actor: message.author,
-        entityId: message.channel.id,
-      });
-      const embed = errorEmbed({
-        title: '🚨 ANTI-NUKE',
-        description: `**${message.author.tag}** used **@everyone/@here** without permission. Incident opened${decision?.escalated ? ` (\`${decision.incident?.id}\`)` : ''}.`,
-        extra: `Channel: <#${message.channel.id}>`,
-      });
-      await sendLog(client, message.guild.id, 'security', { embeds: [embed] });
-    },
+    // ── Anti @everyone / @here removed (Option A chosen) ──────────────
   },
   handleAudit,
   handleRoleUpdateGrant,

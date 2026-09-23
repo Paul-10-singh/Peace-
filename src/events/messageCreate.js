@@ -104,17 +104,22 @@ module.exports = {
       );
       if (mentioned.length) {
         for (const target of mentioned) {
+          const contentStr = message.content.slice(0, 1000) || '*No text content*';
+          const notificationMessage = `⠀⠀ 𓂃 ࣪˖ ִֶָ𐀔 [** TNC Official__   __**](https://discord.gg/far7wH9fmP) ﹑  ⋆｡𖦹 ﹒﹢
+
+-# 𐔌 <a:S_buterflies:1552095564659695736> **you've been noticed** ♡ 🫧
+-# ꕀ ${message.author.username} (${message.author.id}) <a:butterfly:1550512700327600342>
+-# ✦ ${message.guild.name} 🎀🍒
+-# ⌗ <a:DMsend:1550504853078409326> <#${message.channel.id}>
+
+-# ⠀⠀"${contentStr}" <:nightmode:1550504911257739305>
+
+-# <a:sq:1552095567759417477> 𓈒 [tap to see the message](${message.url}) 𓂃  <a:sparkles:1550504947953565717>
+-# ⠀⠀⠀⠀⠀𓈒 ˙ 𓂃 ୨୧`;
+
           const embed = new EmbedBuilder()
-            .setColor(0xFFA500)
-            .setTitle('<a:warning:1550504965955653723> You were pinged!')
-            .addFields(
-              { name: 'Sender', value: `${message.author} (${message.author.id})` },
-              { name: 'Server', value: message.guild.name },
-              { name: 'Channel', value: `${message.channel}` },
-              { name: 'Message Link', value: `[Jump to Message](${message.url})` },
-              { name: 'Message Content', value: message.content.slice(0, 1000) || '*No text content*' }
-            )
-            .setTimestamp();
+            .setColor(0xFFFFFF)
+            .setDescription(notificationMessage);
 
           await target.send({ embeds: [embed] }).catch(() => {});
         }
@@ -123,6 +128,75 @@ module.exports = {
       // Best-effort DM notifications — never crash on any failure
     }
 
+
+    // --- Counter System Hook ---
+    if (!message.author.bot && message.content) {
+      const store = require('../utils/counter/store');
+      const channelConfig = store.getChannel(message.channel.id);
+      
+      if (channelConfig && !channelConfig.paused) {
+        const game = require('../utils/counter/game');
+        let numberVal = NaN;
+        
+        if (channelConfig.mode === 'numbers_arithmetic' && /^[0-9\s\+\-\*\/\(\)]+$/.test(message.content)) {
+           try {
+             // eslint-disable-next-line no-eval
+             numberVal = eval(message.content);
+           } catch(e) {}
+        } else if (/^\d+$/.test(message.content.trim())) {
+           numberVal = parseInt(message.content.trim(), 10);
+        }
+
+        // Only process if they typed what looks like a number attempt.
+        if (!Number.isNaN(numberVal) || /^\d+/.test(message.content)) {
+          const check = game.checkMessage({
+            channelId: message.channel.id,
+            userId: message.author.id,
+            number: numberVal,
+            channel: channelConfig
+          });
+
+          if (check.ok) {
+            store.recordCount({ channelId: message.channel.id, userId: message.author.id, number: numberVal });
+            if (check.reactions && check.reactions.length) {
+              for (const r of check.reactions) {
+                await message.react(r).catch(() => {});
+              }
+            }
+            if (check.embed) {
+              await message.channel.send({ embeds: [check.embed] }).catch(() => {});
+            }
+            return;
+          } else if (check.ruin) {
+            const ruinData = game.onRuin({
+              channelId: message.channel.id,
+              guildId: message.guild.id,
+              userId: message.author.id,
+              number: numberVal,
+              channel: channelConfig,
+              reason: check.reason
+            });
+            store.recordRuin({
+              channelId: message.channel.id,
+              userId: message.author.id,
+              number: numberVal,
+              reason: check.reason
+            });
+            if (ruinData.deleteOffending) {
+              await message.delete().catch(() => {});
+            }
+            await message.channel.send({
+              content: ruinData.content,
+              embeds: ruinData.embed ? [ruinData.embed] : []
+            }).catch(() => {});
+            return;
+          } else if (check.reason === 'invalid_format' && check.delete) {
+            await message.delete().catch(() => {});
+            return;
+          }
+        }
+      }
+    }
 
     // --- Security platform (zero-trust + behavior + content analysis) ---
     // All auto-moderation — scam/anti-link/anti-word/anti-spam and the

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /*
  * Peace* -- Discord Bot -- Developed by Smith.Code
  *
@@ -27,7 +27,7 @@
 const E = require('./emojis');
 
 /* ------------------------------------------------------------------ */
-/* input guards (mirror tod/game.js assert-idiom)                      */
+/* input guards                                                        */
 /* ------------------------------------------------------------------ */
 
 function assertId(value, name) {
@@ -68,22 +68,16 @@ function numberEmojiName(number) {
 }
 
 function buildSuccessReactions({ channel, number, previousNumber }) {
-  if (!channel) return [];
-  const reactions = [];
-  if (channel.on_success === 'react_number' || channel.on_success === 'react_check') {
-    const name = numberEmojiName(previousNumber);
-    if (name && E[name]) reactions.push(E[name]);
-    if (channel.on_success === 'react_check' && E.correct) reactions.push(E.correct);
-  }
-  if (channel.on_success === 'none') return [];
-  return reactions;
+  if (!channel || channel.on_success === 'none') return [];
+  // User specifically requested to ALWAYS use the custom E.correct emoji
+  return E.correct ? [E.correct] : [];
 }
 
 /* ------------------------------------------------------------------ */
 /* ruin embed                                                          */
 /* ------------------------------------------------------------------ */
 
-const RED = 0xED4245f;
+const RED = 0xED4245;
 
 function buildRuinEmbed({ reason, number, resetTo, next }) {
   const reasonText =
@@ -231,7 +225,18 @@ function onRuin({ channelId, guildId, userId, number, channel, reason }) {
   assertId(userId, 'userId');
   assertChannel(channel);
   const resetTo = resetTarget(channel);
+  
+  const reasonText =
+    reason === 'same_user_twice'
+      ? "You can't count two numbers in a row."
+      : reason === 'wrong_number'
+      ? "You jumped the sequence."
+      : "The counter was reset.";
+      
+  const content = `<@${userId}> RUINED IT AT **${number}**!! Next number is **${resetTo + 1}**. ${reasonText}`;
+
   return {
+    content,
     embed: buildRuinEmbed({ reason, number, resetTo, next: resetTo + 1 }),
     resetTo,
     deleteOffending: channel.on_ruin === 'delete',

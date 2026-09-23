@@ -48,6 +48,7 @@ const DEFAULTS = {
   ignoredChannels: [],
   quarantine: { roleId: null, bypass: [], users: {} },
   reactionroles: [],
+  verification: { roleId: null },
 };
 
 function persist() {

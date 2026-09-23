@@ -77,6 +77,27 @@ module.exports = {
       }
     }
 
+    // --- Automatic Welcome DM ---
+    if (!member.user.bot) {
+      const dmWelcomeMessage = `_ _
+⠀⠀   𓈒  <a:nature:1552099429362962452> 𓂃  /[** TNC Official__   __**](https://discord.gg/far7wH9fmP)   ﹑   \` 🤍 \`⠀⠀⠀
+-# _ _⠀     ⠀𐔌  ᗢ⠀⠀ch__ill__ & v*c*⠀𖦹⠀**social**⠀﹒﹢   ꒱꒱
+-# _ _    ⠀ ⠀     ⠀ꕀ⠀⠀__anime__⠀join__**2**__create **!**
+-# _ _ ✦﹒﹢⠀⠀de__v__⠀⸝⸝⠀**events**⠀⸝⸝ ⠀<a:gaming:1552099352158150706> g*aming*⠀<a:music:1550504904521678848>
+-# _ _ [** rules__   __**](https://discord.com/channels/1340379968571576341/1341663035017793647)  [** chat__   __**](https://discord.com/channels/1340379968571576341/1501972344179261611)  [** support__   __**](https://discord.com/channels/1340379968571576341/1551092438460801064)
+-# _ _ 
+-#          <a:LIKEBUTTON:1550504896745181234> Welcome to TNC™
+-#         \`hope you enjoy your stay !\`
+-# _ _                    𝝑ৎ`;
+
+      const { EmbedBuilder } = require('discord.js');
+      const dmEmbed = new EmbedBuilder()
+        .setColor(0xFFFFFF)
+        .setDescription(dmWelcomeMessage);
+
+      await member.send({ embeds: [dmEmbed] }).catch(() => {});
+    }
+
     if (config.enabled) {
       const channel = guild.channels.cache.get(config.channelId);
       if (channel?.isTextBased()) {

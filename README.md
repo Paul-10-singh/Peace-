@@ -21,7 +21,7 @@ E — Elevation:     Zero-trust capability middleware, TTL grants
 `/kick`, `/ban`, `/timeout`, `/untimeout`, `/purge`, `/warn`, `/warnings`, `/unwarn`
 
 ### 🛠️ Utility
-`/avatar`, `/serverinfo`, `/userinfo`, `/roles`, `/role give|remove|list`, `/giverole`, `/roleicon`, `/nickname`, `/welcome`, `/goodbye`, `/lock`, `/unlock`, `/say`, `/poll`, `/remind`, `/ping`, `/stats`, `/help`, `/support`
+`/avatar`, `/serverinfo`, `/userinfo`, `/roles`, `/role give|remove|list`, `/giverole`, `/roleicon`, `/nickname`, `/welcome`, `/goodbye`, `/lock`, `/unlock`, `/say`, `/poll`, `/remind`, `/ping`, `/stats`, `/help`, `/support`, `/counter` (premium counting game), `/verification` (secure verification panel), `/namestyle` (bot profile customizer)
 
 ### 🔐 Security platform (v2.0)
 | Command | What it does |

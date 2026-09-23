@@ -186,6 +186,11 @@ const stepHandlers = {
   },
 
   async lock_channels({ guild }) {
+    const cfg = get(guild.id, 'security');
+    if (cfg.antiNuke?.lockdown === false) {
+      return { ok: true, output: { skipped: true, reason: 'lockdown-disabled-in-config' } };
+    }
+
     let locked = 0;
     for (const channel of guild.channels.cache.values()) {
       if (channel.isTextBased()) {

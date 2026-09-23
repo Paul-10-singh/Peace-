@@ -1,0 +1,137 @@
+/*
+ * Peace✘ - Discord Bot
+ * Developed by Smith.Code
+ *
+ * Counter Configuration Command
+ */
+const { SlashCommandBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { BRAND } = require('../../utils/decorations');
+const store = require('../../utils/counter/store');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('counter')
+    .setDescription('Premium Counter Configuration Panel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .addSubcommand((sub) =>
+      sub
+        .setName('setup')
+        .setDescription('Set up or update a counter channel')
+        .addChannelOption((opt) =>
+          opt
+            .setName('channel')
+            .setDescription('The channel to turn into a counter')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName('mode')
+            .setDescription('Counting mode')
+            .addChoices(
+              { name: 'Numbers only', value: 'numbers_only' },
+              { name: 'Numbers and arithmetic', value: 'numbers_arithmetic' }
+            )
+            .setRequired(true)
+        )
+        .addIntegerOption((opt) =>
+          opt
+            .setName('start')
+            .setDescription('The starting number (default: 0)')
+            .setRequired(false)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('remove')
+        .setDescription('Remove a counter channel')
+        .addChannelOption((opt) =>
+          opt
+            .setName('channel')
+            .setDescription('The channel to remove')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('status')
+        .setDescription('View counter status for a channel')
+        .addChannelOption((opt) =>
+          opt
+            .setName('channel')
+            .setDescription('The channel to view')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+    ),
+
+  async execute(interaction) {
+    const sub = interaction.options.getSubcommand();
+    const targetChannel = interaction.options.getChannel('channel');
+
+    if (sub === 'setup') {
+      const mode = interaction.options.getString('mode');
+      const start = interaction.options.getInteger('start') || 0;
+
+      // Add to store
+      store.getOrCreateChannel({
+        channelId: targetChannel.id,
+        guildId: interaction.guild.id,
+        mode: mode,
+        current: Math.max(0, start - 1), // It expects the next message to be `current + 1`, so if start is 1, current is 0
+        best: 0,
+        resets: 0,
+        ruins: 0,
+        paused: false
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(BRAND.module)
+        .setTitle('🔢 Counter Setup Complete')
+        .setDescription(`Successfully configured the counter channel!`)
+        .addFields(
+          { name: 'Channel', value: `<#${targetChannel.id}>`, inline: true },
+          { name: 'Mode', value: mode === 'numbers_only' ? 'Numbers Only' : 'Arithmetic', inline: true },
+          { name: 'Next Number', value: `**${start}**`, inline: true }
+        )
+        .setFooter({ text: 'Premium Counter System' })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+      await targetChannel.send({ embeds: [embed] }).catch(() => {});
+    } 
+    else if (sub === 'remove') {
+      store.deleteChannel(targetChannel.id);
+      
+      const embed = new EmbedBuilder()
+        .setColor(0xED4245)
+        .setTitle('🔢 Counter Removed')
+        .setDescription(`Successfully removed the counter configuration from <#${targetChannel.id}>.`)
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+    }
+    else if (sub === 'status') {
+      const config = store.getChannel(targetChannel.id);
+      
+      if (!config) {
+        return interaction.reply({ content: `❌ <#${targetChannel.id}> is not configured as a counter channel.`, ephemeral: true });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor(BRAND.module)
+        .setTitle('🔢 Counter Status Panel')
+        .addFields(
+          { name: 'Channel', value: `<#${targetChannel.id}>`, inline: true },
+          { name: 'Mode', value: config.mode === 'numbers_only' ? 'Numbers Only' : 'Arithmetic', inline: true },
+          { name: 'Current Count', value: `**${config.current}**`, inline: true },
+          { name: 'Best Score', value: `**${config.best}**`, inline: true }
+        )
+        .setFooter({ text: 'Premium Counter System' })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+    }
+  },
+};

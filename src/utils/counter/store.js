@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /*
  * Peace* -- Discord Bot -- Developed by Smith.Code
  *
@@ -19,7 +19,7 @@
  *     silent writes, NO accepting junk.
  *   - Multi-statement writes are wrapped in db.transaction() so a
  *     successful count / ruin hits the DB atomically.
- *   - Everything is Counter-flavored: no ToD exports, no ToD comments.
+ *   - Everything is strictly Counter-flavored.
  */
 
 const { open, REQUIRED_TABLES } = require('./db');

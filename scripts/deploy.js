@@ -134,6 +134,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('[deploy] ✘ FAILED:', err.message);
+  console.error('[deploy] ✘ FAILED:', err.stack);
   process.exit(1);
 });
