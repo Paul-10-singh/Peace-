@@ -26,7 +26,6 @@ const EXCLUDED_COMMANDS = [
   'media',
   'mention',
   'addrole',     // duplicate of addroleall
-  'channel',
   'serverlist',
   'botinfo',
   'setprofile',
