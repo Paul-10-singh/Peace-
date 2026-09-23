@@ -112,7 +112,6 @@ module.exports = {
 -# ✦ ${message.guild.name} 🎀🍒
 -# ⌗ <a:DMsend:1550504853078409326> <#${message.channel.id}>
 
--# ⠀⠀"${contentStr}" <:nightmode:1550504911257739305>
 
 -# <a:sq:1552095567759417477> 𓈒 [tap to see the message](${message.url}) 𓂃  <a:sparkles:1550504947953565717>
 -# ⠀⠀⠀⠀⠀𓈒 ˙ 𓂃 ୨୧`;
