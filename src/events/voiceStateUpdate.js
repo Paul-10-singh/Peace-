@@ -34,7 +34,6 @@ async function handleVoiceState(client, oldState, newState) {
         name,
         type: ChannelType.GuildVoice,
         parent: creationChannel.parentId || undefined,
-        position: creationChannel.position + 1,
         permissionOverwrites: [
           ...creationChannel.permissionOverwrites.cache.map((p) => ({
             id: p.id,
@@ -59,6 +58,9 @@ async function handleVoiceState(client, oldState, newState) {
           }
         ],
       });
+      
+      // Ensure it goes below the setup channel
+      await created.setPosition(creationChannel.position + 1).catch(() => {});
       
       saveRoom(guild.id, created.id, { ownerId: member.id, chatId: created.id, createdAt: Date.now() });
       await created.send(panelPayload(created, member.id)).catch(() => {});

@@ -68,7 +68,7 @@ function numberEmojiName(number) {
 }
 
 function buildSuccessReactions({ channel, number, previousNumber }) {
-  if (!channel || channel.on_success === 'none') return [];
+  if (!channel || channel.onSuccess === 'none') return [];
   return ['1550504846199758928'];
 }
 
@@ -150,7 +150,7 @@ function checkMessage({ channelId, userId, number, channel }) {
   assertId(userId, 'userId');
   assertChannel(channel);
 
-  if (channel.paused !== 0) {
+  if (channel.paused) {
     return { ok: false, reason: 'paused', ruin: false, delete: false };
   }
 
@@ -173,18 +173,18 @@ function checkMessage({ channelId, userId, number, channel }) {
       ok: false,
       reason: 'wrong_number',
       ruin: true,
-      delete: channel.on_ruin === 'delete',
+      delete: channel.onRuin === 'delete',
       resetTo: resetTarget(channel),
       reasonText: 'Expected **' + (channel.current + 1) + '**, got **' + number + '**.',
     };
   }
 
-  if (channel.same_user_guard === 1 && channel.last_counter_id === userId) {
+  if (channel.sameUserGuard && channel.lastCounterId === userId) {
     return {
       ok: false,
       reason: 'same_user_twice',
       ruin: true,
-      delete: channel.on_ruin === 'delete',
+      delete: channel.onRuin === 'delete',
       resetTo: resetTarget(channel),
       reasonText: 'You counted twice in a row -- the chain resets.',
     };
@@ -192,7 +192,7 @@ function checkMessage({ channelId, userId, number, channel }) {
 
   const isBest = number > channel.best;
   const isMilestone =
-    channel.checkpoint_every > 0 && number % channel.checkpoint_every === 0;
+    channel.checkpointEvery > 0 && number % channel.checkpointEvery === 0;
 
   return {
     ok: true,
@@ -202,14 +202,14 @@ function checkMessage({ channelId, userId, number, channel }) {
     isMilestone,
     reactions: buildSuccessReactions({ channel, number, previousNumber: number - 1 }),
     embed: isMilestone
-      ? buildMilestoneEmbed({ number, nextMilestone: number + channel.checkpoint_every, best: isBest ? number : channel.best })
+      ? buildMilestoneEmbed({ number, nextMilestone: number + channel.checkpointEvery, best: isBest ? number : channel.best })
       : null,
   };
 }
 
 function resetTarget(channel) {
-  if (channel.reset_behavior === 'to_checkpoint' && channel.checkpoint_every > 0) {
-    return Math.floor(channel.current / channel.checkpoint_every) * channel.checkpoint_every;
+  if (channel.resetBehavior === 'to_checkpoint' && channel.checkpointEvery > 0) {
+    return Math.floor(channel.current / channel.checkpointEvery) * channel.checkpointEvery;
   }
   return 0;
 }
@@ -238,7 +238,7 @@ function onRuin({ channelId, guildId, userId, number, channel, reason }) {
     content,
     embed: buildRuinEmbed({ reason, number, resetTo, next: resetTo + 1 }),
     resetTo,
-    deleteOffending: channel.on_ruin === 'delete',
+    deleteOffending: channel.onRuin === 'delete',
   };
 }
 
@@ -250,15 +250,15 @@ function onMilestone({ channelId, number, channel }) {
   assertId(channelId, 'channelId');
   assertNonNegativeInt(number, 'number');
   assertChannel(channel);
-  if (channel.checkpoint_every <= 0 || number % channel.checkpoint_every !== 0) {
+  if (channel.checkpointEvery <= 0 || number % channel.checkpointEvery !== 0) {
     return { reached: false };
   }
   return {
     reached: true,
-    nextMilestone: number + channel.checkpoint_every,
+    nextMilestone: number + channel.checkpointEvery,
     embed: buildMilestoneEmbed({
       number,
-      nextMilestone: number + channel.checkpoint_every,
+      nextMilestone: number + channel.checkpointEvery,
       best: Math.max(number, channel.best),
     }),
   };
