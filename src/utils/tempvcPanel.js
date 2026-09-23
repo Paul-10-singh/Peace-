@@ -33,13 +33,12 @@ function panelPayload(voice, ownerId) {
   const owner = voice.guild.members.cache.get(ownerId);
   const roomName = voice.name.replace(/^🔊/, '').trim();
   const embed = new EmbedBuilder()
-    .setColor(0x3ddc84)
-    .setTitle('Voice Room Control Panel')
+    .setColor(0xFFFFFF)
+    .setTitle('**Control Panel**')
     .setDescription(
       `• **Owner:** <@${ownerId}>${owner ? ` (${owner.user.tag})` : ''}\n` +
-      `• **Channel:** ${voice}\n` +
-      `• **Members:** ${voice.members.size}\n\n` +
-      '**Use the select menus below to manage your temporary voice room.**'
+      `• **Channel:** ${voice}\n\n` +
+      '**Use the menus below to set up your Private Channel.**'
     )
     .setFooter({ text: `Room: ${roomName}` });
 
@@ -187,9 +186,10 @@ async function handlePanel(interaction) {
   const room = getRoom(interaction.guild.id, voiceId);
   const voice = interaction.guild.channels.cache.get(voiceId);
   if (!room || !voice) return interaction.reply({ content: 'This temporary room no longer exists.', ephemeral: true });
-  if (!isOwner(interaction, voiceId)) return interaction.reply({ content: 'Only the room owner can use this panel.', ephemeral: true });
-
   const action = interaction.values?.[0];
+  if (!isOwner(interaction, voiceId) && action !== 'claim') {
+    return interaction.reply({ content: 'Only the room owner can use this panel.', ephemeral: true });
+  }
   if (action === 'lock' || action === 'unlock') {
     await voice.permissionOverwrites.edit(interaction.guild.id, { Connect: action === 'unlock' }).catch(() => {});
     return interaction.reply({ content: action === 'lock' ? 'Room locked.' : 'Room unlocked.', ephemeral: true });

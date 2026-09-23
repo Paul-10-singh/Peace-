@@ -34,30 +34,34 @@ async function handleVoiceState(client, oldState, newState) {
         name,
         type: ChannelType.GuildVoice,
         parent: creationChannel.parentId || undefined,
-        position: Math.max(0, creationChannel.position - 1),
+        position: creationChannel.position + 1,
         permissionOverwrites: [
-          // Inherit the creation channel's base permissions, then lock to
-          // creator + a standard role or @everyone with view.
           ...creationChannel.permissionOverwrites.cache.map((p) => ({
             id: p.id,
             allow: p.allow,
             deny: p.deny,
           })),
+          { 
+            id: guild.id, 
+            allow: [
+              PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.Stream, 
+              PermissionFlagsBits.UseSoundboard, PermissionFlagsBits.UseExternalSounds, PermissionFlagsBits.UseVAD,
+              PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.AttachFiles, 
+              PermissionFlagsBits.AddReactions, PermissionFlagsBits.UseExternalEmojis, PermissionFlagsBits.UseExternalStickers,
+              PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendTTSMessages, PermissionFlagsBits.SendVoiceMessages
+            ] 
+          },
+          { 
+            id: member.id, 
+            allow: [
+              PermissionFlagsBits.MuteMembers, PermissionFlagsBits.DeafenMembers, PermissionFlagsBits.MoveMembers
+            ] 
+          }
         ],
       });
-      const botId = guild.members.me?.id;
-      const chat = await guild.channels.create({
-        name: `💬-${member.user.username}-room`.slice(0, 32),
-        type: ChannelType.GuildText,
-        parent: creationChannel.parentId || undefined,
-        permissionOverwrites: [
-          { id: guild.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] },
-          { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-          ...(botId ? [{ id: botId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }] : []),
-        ],
-      });
-      saveRoom(guild.id, created.id, { ownerId: member.id, chatId: chat.id, createdAt: Date.now() });
-      await chat.send(panelPayload(created, member.id)).catch(() => {});
+      
+      saveRoom(guild.id, created.id, { ownerId: member.id, chatId: created.id, createdAt: Date.now() });
+      await created.send(panelPayload(created, member.id)).catch(() => {});
       await member.voice.setChannel(created).catch(() => null);
     } catch (err) {
       console.error(`[PeaceX] [TempVC] Could not spawn temp channel for ${member.user.tag}:`, err.message);
@@ -72,18 +76,18 @@ async function handleVoiceState(client, oldState, newState) {
     if (oldChannel && oldChannel.name.startsWith('🔊') && oldChannel.members.size === 0) {
       if (cleaning.has(oldChannel.id)) return;
       cleaning.add(oldChannel.id);
-      setTimeout(async () => {
-        try {
-          if (oldChannel.members.size === 0) {
-            const room = get(guild.id, 'tempvc').rooms?.[oldChannel.id];
-            if (room?.chatId) await guild.channels.cache.get(room.chatId)?.delete('Temp VC panel cleanup').catch(() => null);
-            removeRoom(guild.id, oldChannel.id);
-            await oldChannel.delete('Temp VC idle').catch(() => null);
+      try {
+        if (oldChannel.members.size === 0) {
+          const room = get(guild.id, 'tempvc').rooms?.[oldChannel.id];
+          if (room?.chatId && room.chatId !== oldChannel.id) {
+            await guild.channels.cache.get(room.chatId)?.delete('Temp VC panel cleanup').catch(() => null);
           }
-        } finally {
-          cleaning.delete(oldChannel.id);
+          removeRoom(guild.id, oldChannel.id);
+          await oldChannel.delete('Temp VC idle').catch(() => null);
         }
-      }, 1500);
+      } finally {
+        cleaning.delete(oldChannel.id);
+      }
     }
   }
 }
