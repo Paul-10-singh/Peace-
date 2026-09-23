@@ -146,9 +146,8 @@ module.exports = {
            numberVal = parseInt(message.content.trim(), 10);
         }
 
-        // Only process if they typed what looks like a number attempt.
-        if (!Number.isNaN(numberVal) || /^\d+/.test(message.content)) {
-          const check = game.checkMessage({
+        // Always check every message to delete non-numbers
+        const check = game.checkMessage({
             channelId: message.channel.id,
             userId: message.author.id,
             number: numberVal,
@@ -188,12 +187,15 @@ module.exports = {
               content: ruinData.content,
               embeds: ruinData.embed ? [ruinData.embed] : []
             }).catch(() => {});
+            // Send the new starting number so users can continue
+            await message.channel.send({ content: `${ruinData.resetTo}` }).catch(() => {});
             return;
-          } else if (check.reason === 'invalid_format' && check.delete) {
+          } else if (check.reason === 'invalid_format') {
             await message.delete().catch(() => {});
+            const warning = await message.channel.send({ content: `<@${message.author.id}>, only numbers are allowed here! No text, links, or attachments.` }).catch(() => {});
+            setTimeout(() => warning.delete().catch(() => {}), 5000);
             return;
           }
-        }
       }
     }
 

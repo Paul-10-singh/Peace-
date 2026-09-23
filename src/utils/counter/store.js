@@ -200,7 +200,7 @@ function getOrCreateChannel({
   sameUserGuard = true,
   notifyPrevious = true,
   resetBehavior = 'to_zero',
-  checkpointEvery = 100,
+  checkpointEvery = 50,
   current = 0,
   best = 0,
   resets = 0,
@@ -224,8 +224,8 @@ function getOrCreateChannel({
   if (resetBehavior !== 'to_zero' && resetBehavior !== 'to_checkpoint') {
     throw new TypeError(`counter: reset_behavior must be to_zero or to_checkpoint (got ${JSON.stringify(resetBehavior)})`);
   }
-  if (![0, 100, 500].includes(checkpointEvery)) {
-    throw new TypeError(`counter: checkpoint_every must be 0, 100 or 500 (got ${JSON.stringify(checkpointEvery)})`);
+  if (![0, 50, 100, 500].includes(checkpointEvery)) {
+    throw new TypeError(`counter: checkpoint_every must be 0, 50, 100 or 500 (got ${JSON.stringify(checkpointEvery)})`);
   }
   assertNonNegativeInt(current, 'current');
   assertNonNegativeInt(best, 'best');

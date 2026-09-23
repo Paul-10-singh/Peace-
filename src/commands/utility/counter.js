@@ -24,16 +24,7 @@ module.exports = {
             .addChannelTypes(ChannelType.GuildText)
             .setRequired(true)
         )
-        .addStringOption((opt) =>
-          opt
-            .setName('mode')
-            .setDescription('Counting mode')
-            .addChoices(
-              { name: 'Numbers only', value: 'numbers_only' },
-              { name: 'Numbers and arithmetic', value: 'numbers_arithmetic' }
-            )
-            .setRequired(true)
-        )
+
         .addIntegerOption((opt) =>
           opt
             .setName('start')
@@ -71,14 +62,13 @@ module.exports = {
     const targetChannel = interaction.options.getChannel('channel');
 
     if (sub === 'setup') {
-      const mode = interaction.options.getString('mode');
       const start = interaction.options.getInteger('start') || 0;
 
       // Add to store
       store.getOrCreateChannel({
         channelId: targetChannel.id,
         guildId: interaction.guild.id,
-        mode: mode,
+        mode: 'numbers_only',
         current: Math.max(0, start - 1), // It expects the next message to be `current + 1`, so if start is 1, current is 0
         best: 0,
         resets: 0,
@@ -92,7 +82,6 @@ module.exports = {
         .setDescription(`Successfully configured the counter channel!`)
         .addFields(
           { name: 'Channel', value: `<#${targetChannel.id}>`, inline: true },
-          { name: 'Mode', value: mode === 'numbers_only' ? 'Numbers Only' : 'Arithmetic', inline: true },
           { name: 'Next Number', value: `**${start}**`, inline: true }
         )
         .setFooter({ text: 'Premium Counter System' })
@@ -100,6 +89,7 @@ module.exports = {
 
       await interaction.reply({ embeds: [embed] });
       await targetChannel.send({ embeds: [embed] }).catch(() => {});
+      await targetChannel.send({ content: `${start}` }).catch(() => {});
     } 
     else if (sub === 'remove') {
       store.deleteChannel(targetChannel.id);
@@ -124,7 +114,6 @@ module.exports = {
         .setTitle('🔢 Counter Status Panel')
         .addFields(
           { name: 'Channel', value: `<#${targetChannel.id}>`, inline: true },
-          { name: 'Mode', value: config.mode === 'numbers_only' ? 'Numbers Only' : 'Arithmetic', inline: true },
           { name: 'Current Count', value: `**${config.current}**`, inline: true },
           { name: 'Best Score', value: `**${config.best}**`, inline: true }
         )

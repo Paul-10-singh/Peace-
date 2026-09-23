@@ -69,8 +69,7 @@ function numberEmojiName(number) {
 
 function buildSuccessReactions({ channel, number, previousNumber }) {
   if (!channel || channel.on_success === 'none') return [];
-  // User specifically requested to ALWAYS use the custom E.correct emoji
-  return E.correct ? [E.correct] : [];
+  return ['1550504846199758928'];
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,7 +232,7 @@ function onRuin({ channelId, guildId, userId, number, channel, reason }) {
       ? "You jumped the sequence."
       : "The counter was reset.";
       
-  const content = `<@${userId}> RUINED IT AT **${number}**!! Next number is **${resetTo + 1}**. ${reasonText}`;
+  const content = `<a:wrong:1550504971303395430> <@${userId}> RUINED IT AT **${number}**!! Next number is **${resetTo + 1}**. ${reasonText}`;
 
   return {
     content,
