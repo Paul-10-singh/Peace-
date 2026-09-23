@@ -63,9 +63,32 @@ module.exports = {
 
       // Send panel
       await interaction.channel.send({ embeds: [embed], components: [row] });
+
+      // Auto-configure server permissions for verification
+      try {
+        // 1. Remove ViewChannel from @everyone globally
+        await interaction.guild.roles.everyone.setPermissions(
+          interaction.guild.roles.everyone.permissions.remove(PermissionFlagsBits.ViewChannel)
+        );
+
+        // 2. Grant ViewChannel to the verified role globally
+        await role.setPermissions(
+          role.permissions.add(PermissionFlagsBits.ViewChannel)
+        );
+
+        // 3. Make sure @everyone can still see the verification channel (but not type)
+        await interaction.channel.permissionOverwrites.edit(interaction.guild.id, {
+          ViewChannel: true,
+          SendMessages: false,
+          AddReactions: false,
+          ReadMessageHistory: true
+        });
+      } catch (err) {
+        console.error('[Verification] Failed to auto-configure permissions:', err);
+      }
       
       // Reply ephemerally to the command user
-      await interaction.reply({ content: `✅ Verification panel has been set up! Assigned role: ${role}`, ephemeral: true });
+      await interaction.reply({ content: `✅ Verification panel has been set up!\n🔒 Server locked down for unverified members.\n🔓 Assigned role: ${role}`, ephemeral: true });
     } 
     else if (sub === 'disable') {
       set(interaction.guild.id, 'verification', { roleId: null });
