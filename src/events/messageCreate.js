@@ -108,7 +108,7 @@ module.exports = {
           const notificationMessage = `⠀⠀ 𓂃 ࣪˖ ִֶָ𐀔 [** TNC Official__   __**](https://discord.gg/far7wH9fmP) ﹑  ⋆｡𖦹 ﹒﹢
 
 -# 𐔌 <a:S_buterflies:1552095564659695736> **you've been noticed** ♡ 🫧
--# ꕀ ${message.author.username} (${message.author.id}) <a:butterfly:1550512700327600342>
+-# ꕀ <@${message.author.id}> <a:butterfly:1550512700327600342>
 -# ✦ ${message.guild.name} 🎀🍒
 -# ⌗ <a:DMsend:1550504853078409326> <#${message.channel.id}>
 
