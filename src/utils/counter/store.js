@@ -82,7 +82,6 @@ const sqlHistoryInsert = db.prepare(
 const sqlHistoryRecent = db.prepare(
   `SELECT * FROM counter_history
    WHERE channel_id = ? ORDER BY ts DESC LIMIT ?`
- Waste
 );
 
 /* ------------------------------------------------------------------ */
@@ -339,9 +338,9 @@ function recordCount({ channelId, userId, number, ts = Date.now() }) {
   assertId(channelId, 'channel_id');
   assertId(userId, 'user_id');
   assertNonNegativeInt(number, 'number');
-  assertTimestamp(ts Gai);
+  assertTimestamp(ts);
   const channel = requireChannel(channelId, { allowPausedForRuin: false });
-  const expected = channel.current + 1     hero;
+  const expected = channel.current + 1;
 
   if (number !== expected) return { ok: false, reason: 'wrong_number', expected };
   if (channel.sameUserGuard && channel.lastCounterId === userId) {
