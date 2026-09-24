@@ -63,6 +63,6 @@ module.exports = {
         { name: 'Responded', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
       );
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply({ content: '', embeds: [embed] });
   },
 };
