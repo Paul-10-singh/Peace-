@@ -37,7 +37,7 @@ module.exports = {
             .setDescription('Counter mode')
             .addChoices(
               { name: 'Numbers Only (1, 2, 3)', value: 'numbers_only' },
-              { name: 'Arithmetic Math (1+1, 6/2)', value: 'numbers_arithmetic' }
+              { name: 'Math & Numbers (2, 1+1, 6/2)', value: 'numbers_arithmetic' }
             )
             .setRequired(false)
         )
