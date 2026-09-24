@@ -31,6 +31,16 @@ module.exports = {
             .setDescription('The starting number (default: 0)')
             .setRequired(false)
         )
+        .addStringOption((opt) =>
+          opt
+            .setName('mode')
+            .setDescription('Counter mode')
+            .addChoices(
+              { name: 'Numbers Only (1, 2, 3)', value: 'numbers_only' },
+              { name: 'Arithmetic Math (1+1, 6/2)', value: 'numbers_arithmetic' }
+            )
+            .setRequired(false)
+        )
     )
     .addSubcommand((sub) =>
       sub
@@ -63,12 +73,13 @@ module.exports = {
 
     if (sub === 'setup') {
       const start = interaction.options.getInteger('start') || 0;
+      const mode = interaction.options.getString('mode') || 'numbers_only';
 
       // Add to store
       store.getOrCreateChannel({
         channelId: targetChannel.id,
         guildId: interaction.guild.id,
-        mode: 'numbers_only',
+        mode: mode,
         current: Math.max(0, start - 1), // It expects the next message to be `current + 1`, so if start is 1, current is 0
         best: 0,
         resets: 0,
