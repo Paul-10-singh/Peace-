@@ -172,6 +172,16 @@ module.exports = {
         }
 
         try {
+                    // Remove the autorole (unverified role) if it is set and the user has it
+          const autoRoleConfig = get(interaction.guild.id, 'autorole');
+          if (autoRoleConfig && autoRoleConfig.roleId) {
+            const unverifiedRole = interaction.guild.roles.cache.get(autoRoleConfig.roleId);
+            if (unverifiedRole && interaction.member.roles.cache.has(unverifiedRole.id)) {
+              await interaction.member.roles.remove(unverifiedRole, 'User verified (removing unverified role)').catch(() => {});
+            }
+          }
+
+          // Add the verified role
           await interaction.member.roles.add(role, 'User verified themselves via panel');
           return interaction.reply({ content: '<a:correct:1550504846199758928> You have been verified successfully!', flags: MessageFlags.Ephemeral });
         } catch (err) {
