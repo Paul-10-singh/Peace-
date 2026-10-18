@@ -20,9 +20,10 @@ module.exports = {
     const commands = loadCommands();
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+    await rest.put(Routes.applicationGuildCommands(client.user.id, interaction.guild.id), { body: [] }).catch(() => {});
 
     await interaction.editReply(
-      `Refreshed **${commands.length}** commands (global scope). If any old guild-scoped copies linger, run \`npm run deploy\` once to wipe them.`
+      `Refreshed **${commands.length}** commands (global scope) and cleared stale guild-scoped commands in this server.`
     );
   },
 };

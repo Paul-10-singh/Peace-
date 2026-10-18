@@ -23,6 +23,8 @@ const VC_MERGES = {
   vchart: 'chart',
 };
 
+const LEGACY_COMMANDS = new Map();
+
 function asSubcommand(command, name) {
   const data = command.data.toJSON();
   const options = data.options || [];
@@ -48,6 +50,7 @@ function mergeInto(collection, groupName, names) {
     merged[name] = command;
     subcommands.push(subcommand);
     collection.delete(name);
+    LEGACY_COMMANDS.set(name, { command, parentGroup: groupName, subName: name });
   }
 
   if (!subcommands.length) return;
@@ -77,6 +80,7 @@ function mergeRenamedInto(collection, groupName, renames) {
     merged[subName] = command;
     subcommands.push(subcommand);
     collection.delete(sourceName);
+    LEGACY_COMMANDS.set(sourceName, { command, parentGroup: groupName, subName });
   }
 
   if (!subcommands.length) return;
@@ -101,4 +105,8 @@ function getCommandForInteraction(command, subcommand) {
   return command?.__mergedCommands?.[subcommand] || command;
 }
 
-module.exports = { applyCommandGroups, getCommandForInteraction };
+function getLegacyCommand(name) {
+  return LEGACY_COMMANDS.get(name);
+}
+
+module.exports = { applyCommandGroups, getCommandForInteraction, getLegacyCommand };

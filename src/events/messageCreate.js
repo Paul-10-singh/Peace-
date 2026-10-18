@@ -137,11 +137,10 @@ module.exports = {
         const game = require('../utils/counter/game');
         let numberVal = NaN;
         
-        if (channelConfig.mode === 'numbers_arithmetic' && /^[0-9\s\+\-\*\/\(\)]+$/.test(message.content)) {
-           try {
-             // eslint-disable-next-line no-eval
-             numberVal = eval(message.content);
-           } catch(e) {}
+        if (channelConfig.mode === 'numbers_arithmetic') {
+           const evaluator = require('../utils/counter/evaluator');
+           const res = evaluator.evaluate(message.content);
+           if (res.ok) numberVal = res.value;
         } else if (/^\d+$/.test(message.content.trim())) {
            numberVal = parseInt(message.content.trim(), 10);
         }

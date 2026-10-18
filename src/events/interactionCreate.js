@@ -7,7 +7,7 @@ const { MessageFlags } = require('discord.js');
 const { reply } = require('../utils/helpers');
 const { setDmNotify } = require('../utils/afk');
 const { MAX_NOTES, getUserNotes, addNote, editNote } = require('../utils/notes');
-const { getCommandForInteraction } = require('../utils/commandGroups');
+const { getCommandForInteraction, getLegacyCommand } = require('../utils/commandGroups');
 
 /* eslint-disable */
 /* eslint-enable */
@@ -69,10 +69,17 @@ module.exports = {
   name: 'interactionCreate',
   async execute(client, interaction) {
     if (interaction.isChatInputCommand()) {
-      const registeredCommand = client.commands.get(interaction.commandName);
+      let registeredCommand = client.commands.get(interaction.commandName);
+      let legacy = null;
       if (!registeredCommand) {
-        // Stale global copy (e.g. /vcstats before the new /vc set propagates)
-        // or a renamed/removed command — reply instead of timing out.
+        legacy = getLegacyCommand(interaction.commandName);
+        if (legacy) {
+          registeredCommand = legacy.command;
+        }
+      }
+
+      if (!registeredCommand) {
+        // Stale global copy or a removed command — reply instead of timing out.
         return interaction
           .reply({
             content: '<a:wrong:1550504971303395430> This command is outdated — the owner needs to re-sync commands (`/refresh`).',
@@ -82,7 +89,7 @@ module.exports = {
       }
 
       const { hasAccess } = require('../utils/permissions');
-      const sub = interaction.options.getSubcommand(false);
+      const sub = interaction.options.getSubcommand(false) || (legacy ? legacy.subName : null);
       const command = getCommandForInteraction(registeredCommand, sub);
       const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.member || interaction.user, interaction.guild, command.data.name, sub);
       if (!allowed) {
@@ -91,7 +98,7 @@ module.exports = {
 
       try {
         const previous = client.embedModule;
-        client.embedModule = command.__folder;
+        client.embedModule = command.__folder || (legacy && legacy.command?.__folder);
         try {
           await command.execute(interaction, client);
         } finally {
@@ -166,23 +173,39 @@ module.exports = {
           return interaction.reply({ content: '<a:wrong:1550504971303395430> Verification system is currently disabled.', flags: MessageFlags.Ephemeral });
         }
 
-        const role = interaction.guild.roles.cache.get(config.roleId);
+        const role = interaction.guild.roles.cache.get(config.roleId) || await interaction.guild.roles.fetch(config.roleId).catch(() => null);
         if (!role) {
           return interaction.reply({ content: '<a:wrong:1550504971303395430> The verification role is no longer valid or has been deleted.', flags: MessageFlags.Ephemeral });
         }
 
+        const alreadyHasRole = interaction.member.roles.cache.has(role.id);
+        const hasRemoveRole = config.removeRoleId ? interaction.member.roles.cache.has(config.removeRoleId) : false;
+
+        if (alreadyHasRole && !hasRemoveRole) {
+          return interaction.reply({ content: '<a:correct:1550504846199758928> You are already verified!', flags: MessageFlags.Ephemeral });
+        }
+
         try {
-                    // Remove the autorole (unverified role) if it is set and the user has it
-          const autoRoleConfig = get(interaction.guild.id, 'autorole');
-          if (autoRoleConfig && autoRoleConfig.roleId) {
-            const unverifiedRole = interaction.guild.roles.cache.get(autoRoleConfig.roleId);
-            if (unverifiedRole && interaction.member.roles.cache.has(unverifiedRole.id)) {
-              await interaction.member.roles.remove(unverifiedRole, 'User verified (removing unverified role)').catch(() => {});
+          if (!alreadyHasRole) {
+            await interaction.member.roles.add(role, 'User verified themselves via panel');
+          }
+          // Remove specifically configured removeRole
+          if (config.removeRoleId) {
+            const removeRole = interaction.guild.roles.cache.get(config.removeRoleId) || await interaction.guild.roles.fetch(config.removeRoleId).catch(() => null);
+            if (removeRole && interaction.member.roles.cache.has(removeRole.id)) {
+              await interaction.member.roles.remove(removeRole, 'User verified themselves via panel (removed unverified role)').catch((err) => {
+                console.error(`[PeaceX] [Verification] Could not remove unverified role:`, err.message);
+              });
             }
           }
-
-          // Add the verified role
-          await interaction.member.roles.add(role, 'User verified themselves via panel');
+          // Also remove server autorole (if set and different from verified role)
+          const autoRoleConfig = get(interaction.guild.id, 'autorole');
+          if (autoRoleConfig?.roleId && autoRoleConfig.roleId !== config.roleId) {
+            const autoRole = interaction.guild.roles.cache.get(autoRoleConfig.roleId) || await interaction.guild.roles.fetch(autoRoleConfig.roleId).catch(() => null);
+            if (autoRole && interaction.member.roles.cache.has(autoRole.id)) {
+              await interaction.member.roles.remove(autoRole, 'User verified (removing unverified autorole)').catch(() => {});
+            }
+          }
           return interaction.reply({ content: '<a:correct:1550504846199758928> You have been verified successfully!', flags: MessageFlags.Ephemeral });
         } catch (err) {
           console.error(`[PeaceX] [Verification] Could not assign role:`, err.message);

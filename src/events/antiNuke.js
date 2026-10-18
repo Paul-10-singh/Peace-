@@ -109,6 +109,43 @@ async function handleRoleUpdateGrant(client, guild, role, beforePerms) {
   return gateway.onRoleGrant(client, guild, role, beforePerms);
 }
 
+/**
+ * Anti-Vanity protection: detect unauthorized changes to the server's vanity URL code
+ * and immediately revert it while escalating through the security gateway.
+ */
+async function handleVanityChange(client, oldGuild, newGuild) {
+  const cfg = get(newGuild.id, 'security');
+  if (cfg.antiVanity?.enabled === false || !cfg.antiNuke?.enabled) return;
+
+  const actor = await getActor(newGuild, AuditLogEvent.GuildUpdate);
+  if (!actor || actor.id === client.user.id) return;
+
+  const oldCode = oldGuild.vanityURLCode;
+  const newCode = newGuild.vanityURLCode || 'none';
+
+  const gateway = require('../security/gateway');
+  const res = await gateway.onAuditEvent(client, {
+    guild: newGuild,
+    capability: 'guild.update',
+    label: `vanity URL changed from "${oldCode}" to "${newCode}"`,
+    actor,
+    entityId: newGuild.id,
+    metadata: { oldVanity: oldCode, newVanity: newCode },
+  });
+
+  if (res?.escalated && oldCode) {
+    try {
+      const { Routes } = require('discord.js');
+      await client.rest.patch(Routes.guildVanityUrl(newGuild.id), {
+        body: { code: oldCode },
+        reason: `[Anti-Vanity] Unauthorized vanity change by ${actor.tag || actor.id} — restored previous vanity URL`,
+      });
+    } catch (err) {
+      console.error(`[Anti-Vanity] Failed to revert vanity code "${oldCode}" for guild ${newGuild.id}:`, err.message);
+    }
+  }
+}
+
 module.exports = {
   events: {
     channelCreate: (client, channel) => handleAudit(client, channel.guild, AuditLogEvent.ChannelCreate),
@@ -149,7 +186,14 @@ module.exports = {
     emojiDelete: (client, emoji) => handleAudit(client, emoji.guild, AuditLogEvent.EmojiDelete),
     emojiUpdate: (client, emoji) => handleAudit(client, emoji.guild, AuditLogEvent.EmojiUpdate),
 
-    guildUpdate: (client, guild) => handleAudit(client, guild, AuditLogEvent.GuildUpdate),
+    guildUpdate: async (client, oldGuild, newGuild) => {
+      const guild = newGuild || oldGuild;
+      if (!guild) return;
+      if (oldGuild && newGuild && oldGuild.vanityURLCode && oldGuild.vanityURLCode !== newGuild.vanityURLCode) {
+        await handleVanityChange(client, oldGuild, newGuild);
+      }
+      await handleAudit(client, guild, AuditLogEvent.GuildUpdate);
+    },
 
     // ── Anti bot-add ─────────────────────────────────────────────────────
     guildMemberAdd: async (client, member) => {
@@ -162,5 +206,6 @@ module.exports = {
   },
   handleAudit,
   handleRoleUpdateGrant,
+  handleVanityChange,
   _auditMap: AUDIT,
 };

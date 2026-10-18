@@ -11,11 +11,11 @@
  * Peace* registry.
  */
 
-const { describe, it, expect } = require('vitest');
-const { createRequire } = require('node:module');
-const requireFromHosting = createRequire(require.resolve('../../src/utils/counter/game.js'));
+import { describe, it, expect } from 'vitest';
+import { createRequire } from 'module';
 
-const game = requireFromHosting('../../src/utils/counter/game.js');
+const require = createRequire(import.meta.url);
+const game = require('../../src/utils/counter/game.js');
 
 function channel(overrides = {}) {
   return {

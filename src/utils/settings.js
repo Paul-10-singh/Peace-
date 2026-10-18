@@ -26,6 +26,8 @@ const DEFAULTS = {
     antiSpam: { enabled: false, maxMessages: 5, intervalMs: 5000 },
     antiLink: { enabled: false, allow: [], blockScam: true },
     antiNuke: { enabled: false, punishment: 'ban', extraOwners: [], whitelistRoles: [], lockdown: true },
+    antiGhostPing: { enabled: true },
+    antiVanity: { enabled: true },
     words: [],
   },
   stats: { enabled: false, members: null, bots: null, category: null },
@@ -48,7 +50,7 @@ const DEFAULTS = {
   ignoredChannels: [],
   quarantine: { roleId: null, bypass: [], users: {} },
   reactionroles: [],
-  verification: { roleId: null },
+  verification: { roleId: null, removeRoleId: null },
 };
 
 function persist() {
