@@ -20,7 +20,7 @@ const OPT = {
 
 function isOwnerId(client, userId, guildId) {
   try {
-    return require('../utils/owners').isOwner(userId, guildId);
+    const g = client?.guilds?.cache?.get(String(guildId)); return require('../utils/owners').isOwner(userId, guildId, g);
   } catch {
     return false;
   }
@@ -389,11 +389,20 @@ async function tryRunMessageCommand(client, message) {
 
   // Enforce the same 4-tier access control as slash commands.
   const { hasAccess } = require('../utils/permissions');
-  const { isOwner } = require('../utils/owners');
+  const { isOwner, isBotOwner, BOT_OWNER_COMMANDS } = require('../utils/owners');
   const resolved = resolveOptions(command, args, message);
+
+  const isBotOnly = command.botOwnerOnly || BOT_OWNER_COMMANDS.has(command.data?.name) || (resolved.sub && BOT_OWNER_COMMANDS.has(resolved.sub));
+  if (isBotOnly && !isBotOwner(message.author.id)) {
+    await message.channel
+      .send({ content: '<a:wrong:1550504971303395430> This command is strictly reserved for the **Bot Owner**.' })
+      .catch(() => {});
+    return true;
+  }
+
   const allowedAccess = command.ownerOnly
-    ? isOwner(message.author.id, message.guild?.id)
-    : hasAccess(message.member || message.author, message.guild, command.data.name, resolved.sub);
+    ? isOwner(message.author.id, message.guild?.id, message.guild)
+    : hasAccess(message.member || message.author, message.guild, command.data?.name, resolved.sub);
   if (!allowedAccess) {
     await message.channel
       .send({ content: "<a:wrong:1550504971303395430> You don't have permission to use this command." })

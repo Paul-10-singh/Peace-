@@ -1,14 +1,15 @@
 const { SlashCommandBuilder, REST, Routes, MessageFlags } = require('discord.js');
-const { isOwner } = require('../../utils/owners');
+const { isBotOwner } = require('../../utils/owners');
 const { loadCommands } = require('../../../scripts/loadCommands');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('refresh')
     .setDescription('Refresh this server without interrupting anything'),
+  botOwnerOnly: true,
   ownerOnly: true,
   async execute(interaction, client) {
-    if (!interaction.guild || !isOwner(interaction.user.id, interaction.guild.id)) {
+    if (!interaction.guild || !isBotOwner(interaction.user.id)) {
       return interaction.reply({ content: 'Only the bot owner can use this command.', flags: MessageFlags.Ephemeral });
     }
 

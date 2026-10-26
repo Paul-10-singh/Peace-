@@ -1,4 +1,4 @@
-﻿/*
+/*
  * PeaceΓ£ÿ - Discord Bot
  * Developed by Smith.Code
  *
@@ -19,6 +19,8 @@
  */
 const path = require('path');
 const fs = require('fs');
+const { EmbedBuilder } = require('discord.js');
+const { BRAND, footer } = require('./decorations');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -386,7 +388,124 @@ function getGuildStats(guildId, startDate, endDate) {
   return [...totals.entries()];
 }
 
-/** ASCII chart string, matching the original report layout. */
+/**
+ * Builds sleek, paginated Discord embeds for the weekly VC activity report.
+ * Each member entry includes:
+ *  - Rank medal / number (🥇, 🥈, 🥉, #04, ...)
+ *  - Display name and clickable <@userId> mention
+ *  - Explicit User ID in backticks (`userId`)
+ *  - Formatted VC time (`HH:MM:SS`)
+ *  - ACTIVE / INACTIVE status badge with custom server emoji
+ *
+ * @param {import('discord.js').Guild} guild
+ * @param {number} daysOffset
+ * @param {object} options
+ * @returns {Promise<EmbedBuilder[]>}
+ */
+async function buildWeeklyReportEmbeds(guild, daysOffset = 0, options = {}) {
+  const { startDate, endDate } = getWeekRange(daysOffset);
+  const recorded = getGuildStats(guild.id, startDate, endDate);
+
+  // Combine recorded time + any ongoing live VC time for this week
+  const totals = new Map(recorded);
+  if (daysOffset === 0 && guild.voiceStates?.cache) {
+    for (const vs of guild.voiceStates.cache.values()) {
+      if (vs.member?.id && !vs.member.user?.bot) {
+        const live = getLiveSeconds(vs.member.id, guild.id);
+        if (live > 0) {
+          totals.set(vs.member.id, (totals.get(vs.member.id) || 0) + live);
+        }
+      }
+    }
+  }
+
+  const rows = [...totals.entries()]
+    .filter(([userId, sec]) => userId && sec > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (!rows.length) return [];
+
+  // Try fetching uncached guild members so display names are accurate
+  if (guild.members?.fetch && (!guild.members.cache || guild.members.cache.size < rows.length)) {
+    try {
+      await guild.members.fetch().catch(() => {});
+    } catch {}
+  }
+
+  const label = daysOffset === 0 ? 'This Week' : 'Last Week';
+  const activeCount = rows.filter(([, s]) => s >= WEEKLY_GOAL_HOURS * 3600).length;
+  const inactiveCount = rows.length - activeCount;
+  const totalSecondsSum = rows.reduce((acc, [, s]) => acc + s, 0);
+
+  // Build formatted cards for each member
+  const memberCards = rows.map(([userId, totalSeconds], i) => {
+    const member = guild.members?.cache?.get(String(userId));
+    const rawName = member
+      ? (member.displayName || member.user?.username)
+      : (options.client?.users?.cache?.get(String(userId))?.username || 'Member');
+    const cleanName = String(rawName).replace(/\*\*/g, '');
+    const timeStr = formatHMS(totalSeconds);
+    const isActive = totalSeconds >= WEEKLY_GOAL_HOURS * 3600;
+    const status = isActive ? `**ACTIVE** ${E.correct}` : `**INACTIVE** ${E.wrong}`;
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ('`#' + String(i + 1).padStart(2, '0') + '`');
+
+    return `${medal} **${cleanName}** (<@${userId}>)\n   🆔 \`${userId}\` ┆ ⏱️ \`${timeStr}\` ┆ ${status}`;
+  });
+
+  // Group into pages of 10 members for clean vertical spacing
+  const MEMBERS_PER_PAGE = 10;
+  const totalPages = Math.ceil(memberCards.length / MEMBERS_PER_PAGE) || 1;
+  const embeds = [];
+
+  for (let page = 0; page < totalPages; page++) {
+    const pageItems = memberCards.slice(page * MEMBERS_PER_PAGE, (page + 1) * MEMBERS_PER_PAGE);
+    const embed = new EmbedBuilder()
+      .setColor(BRAND?.primary || 0x353535)
+      .setTimestamp();
+
+    if (guild.iconURL) {
+      const icon = guild.iconURL({ dynamic: true });
+      if (icon) embed.setThumbnail(icon);
+    }
+
+    const titlePrefix = options.isSundayReport
+      ? `${E.owner} Sunday VC Activity Report`
+      : `${E.weeklychart} Weekly VC Activity Report`;
+    embed.setTitle(`${titlePrefix} — ${guild.name}`);
+
+    const descLines = [];
+    if (page === 0) {
+      descLines.push(
+        `### 📊 **WEEKLY VC ACTIVITY CHART (${label.toUpperCase()})**`,
+        `🗓️ **Period:** \`${startDate}\` to \`${endDate}\``,
+        `🎯 **Target Goal:** \`${WEEKLY_GOAL_HOURS} Hours\` to be **ACTIVE**`,
+        `👥 **Total Tracked:** \`${rows.length}\` members ┆ ⏱️ **Total VC Time:** \`${formatHMS(totalSecondsSum)}\``,
+        `🟢 **Active (Goal Met):** \`${activeCount}\` ┆ 🔴 **Inactive:** \`${inactiveCount}\``,
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+        ''
+      );
+    } else {
+      descLines.push(`*(Continued from Page ${page})*`, '━━━━━━━━━━━━━━━━━━━━━━━━━━━━', '');
+    }
+
+    descLines.push(pageItems.join('\n\n'));
+    embed.setDescription(descLines.join('\n'));
+
+    const botAvatar = options.client?.user?.displayAvatarURL?.({ dynamic: true }) || null;
+    const footerText = totalPages > 1
+      ? `Page ${page + 1} of ${totalPages} • ${rows.length} Members Tracked`
+      : `${rows.length} Members Tracked`;
+    embed.setFooter(footer(footerText, botAvatar));
+
+    embeds.push(embed);
+  }
+
+  return embeds;
+}
+/**
+ * Clean formatted text report, including User IDs and Discord mentions.
+ * Used as a fallback or for text-only contexts.
+ */
 function generateWeeklyReport(guild, daysOffset = 0) {
   const { startDate, endDate } = getWeekRange(daysOffset);
   const rows = getGuildStats(guild.id, startDate, endDate).sort((a, b) => b[1] - a[1]);
@@ -394,24 +513,34 @@ function generateWeeklyReport(guild, daysOffset = 0) {
   if (!rows.length) return 'No voice chat activity recorded for this period.';
 
   const label = daysOffset === 0 ? 'THIS WEEK' : 'LAST WEEK';
+  const activeCount = rows.filter(([, s]) => s >= WEEKLY_GOAL_HOURS * 3600).length;
+  const inactiveCount = rows.length - activeCount;
+  const totalSecondsSum = rows.reduce((acc, [, s]) => acc + s, 0);
+
   const lines = [
     `${E.weeklychart} **WEEKLY VC ACTIVITY CHART (${label})**`,
-    `${E.period} Period: ${startDate} to ${endDate}`,
-    `${E.target} Target Goal: ${WEEKLY_GOAL_HOURS} Hours`,
-    '```',
-    `${'Member'.padEnd(18)} | ${'Time Spent'.padEnd(12)} | ${'Status'.padEnd(10)}`,
-    '-'.repeat(48),
+    `${E.period} **Period:** \`${startDate}\` to \`${endDate}\``,
+    `${E.target} **Target Goal:** \`${WEEKLY_GOAL_HOURS} Hours\` to be **ACTIVE**`,
+    `👥 **Total Tracked:** \`${rows.length}\` members ┆ ⏱️ **Total VC Time:** \`${formatHMS(totalSecondsSum)}\``,
+    `🟢 **Active:** \`${activeCount}\` ┆ 🔴 **Inactive:** \`${inactiveCount}\``,
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    '',
   ];
 
-  for (const [userId, totalSeconds] of rows) {
-    const member = guild.members.cache.get(String(userId));
-    const name = (member ? member.displayName : `User ${userId}`).slice(0, 16);
+  for (let i = 0; i < rows.length; i++) {
+    const [userId, totalSeconds] = rows[i];
+    const member = guild.members?.cache?.get(String(userId));
+    const rawName = member ? (member.displayName || member.user?.username) : `User ${userId}`;
+    const cleanName = String(rawName).replace(/\*\*/g, '');
     const timeStr = formatHMS(totalSeconds);
-    const status = totalSeconds >= WEEKLY_GOAL_HOURS * 3600 ? `ACTIVE ${E.correct}` : `INACTIVE ${E.wrong}`;
-    lines.push(`${name.padEnd(18)} | ${timeStr.padEnd(12)} | ${status}`);
+    const isActive = totalSeconds >= WEEKLY_GOAL_HOURS * 3600;
+    const status = isActive ? `**ACTIVE** ${E.correct}` : `**INACTIVE** ${E.wrong}`;
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ('`#' + String(i + 1).padStart(2, '0') + '`');
+
+    lines.push(`${medal} **${cleanName}** (<@${userId}>)`);
+    lines.push(`   🆔 \`${userId}\` ┆ ⏱️ \`${timeStr}\` ┆ ${status}\n`);
   }
 
-  lines.push('```');
   return lines.join('\n');
 }
 
@@ -484,7 +613,158 @@ async function verifyPresenceIntent(client) {
   }
 }
 
-// ΓöÇΓöÇ Automated Sunday report (11 PM, DMs every guild owner) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Automated Sunday report (11 PM, DMs each guild's owner) ───────────────────
+async function sendSundayWeeklyReports(client, options = {}) {
+  const { targetGuildId = null } = options;
+  const results = {
+    totalGuilds: 0,
+    deliveredToOwnerDm: [],
+    fallbackToChannel: [],
+    noActivity: [],
+    failed: [],
+  };
+
+  const guilds = targetGuildId
+    ? [client.guilds.cache.get(targetGuildId)].filter(Boolean)
+    : [...client.guilds.cache.values()];
+
+  results.totalGuilds = guilds.length;
+
+  for (const guild of guilds) {
+    try {
+      let owner = guild.members?.cache?.get(guild.ownerId);
+      if (!owner && typeof guild.fetchOwner === 'function') {
+        try {
+          owner = await guild.fetchOwner();
+        } catch {}
+      }
+      if (!owner && guild.ownerId && typeof client.users?.fetch === 'function') {
+        try {
+          owner = await client.users.fetch(guild.ownerId);
+        } catch {}
+      }
+
+      const embeds = await (module.exports.buildWeeklyReportEmbeds || buildWeeklyReportEmbeds)(guild, 0, { isSundayReport: true, client });
+      if (!embeds.length) {
+        results.noActivity.push({ id: guild.id, name: guild.name });
+        continue;
+      }
+
+      let dmSuccess = false;
+      if (owner) {
+        try {
+          for (let i = 0; i < embeds.length; i += 10) {
+            await owner.send({ embeds: embeds.slice(i, i + 10) });
+          }
+          dmSuccess = true;
+          results.deliveredToOwnerDm.push({ id: guild.id, name: guild.name, ownerId: guild.ownerId });
+        } catch (dmErr) {
+          console.warn(`[PeaceX] [vcTracker] Failed to DM embed report to owner of ${guild.name} (${dmErr.message}). Trying text fallback...`);
+          try {
+            const chart = generateWeeklyReport(guild, 0);
+            const chunks = splitMessage(`${E.owner} **Sunday VC Activity Report for ${guild.name}**\n\n${chart}`);
+            for (const chunk of chunks) await owner.send(chunk);
+            dmSuccess = true;
+            results.deliveredToOwnerDm.push({ id: guild.id, name: guild.name, ownerId: guild.ownerId });
+          } catch (textErr) {
+            console.warn(`[PeaceX] [vcTracker] Failed to DM owner of ${guild.name} via text fallback too: ${textErr.message}`);
+          }
+        }
+      }
+
+      // If DM failed (e.g. server owner DMs are closed), deliver to a fallback text channel in the guild
+      if (!dmSuccess) {
+        let channel = null;
+        const me = guild.members?.me || client.user;
+        const perms = ['SendMessages', 'EmbedLinks', 'ViewChannel'];
+
+        if (guild.systemChannel && guild.systemChannel.permissionsFor?.(me)?.has(perms)) {
+          channel = guild.systemChannel;
+        }
+
+        if (!channel && guild.channels?.cache) {
+          channel = guild.channels.cache.find(
+            (c) =>
+              c.isTextBased?.() &&
+              !c.isVoiceBased?.() &&
+              !c.isThread?.() &&
+              c.permissionsFor?.(me)?.has(perms)
+          );
+        }
+
+        if (channel) {
+          try {
+            const note = `ℹ️ **Sunday VC Activity Report** for **${guild.name}**\n*(Note: Could not deliver to server owner <@${guild.ownerId}> via DM because their Direct Messages are closed.)*`;
+            await channel.send({ content: note, embeds: embeds.slice(0, 10) });
+            for (let i = 10; i < embeds.length; i += 10) {
+              await channel.send({ embeds: embeds.slice(i, i + 10) });
+            }
+            results.fallbackToChannel.push({ id: guild.id, name: guild.name, channelId: channel.id });
+          } catch (chErr) {
+            console.error(`[PeaceX] [vcTracker] Fallback channel send failed for ${guild.name}: ${chErr.message}`);
+            results.failed.push({ id: guild.id, name: guild.name, reason: chErr.message });
+          }
+        } else {
+          results.failed.push({ id: guild.id, name: guild.name, reason: 'DMs closed and no accessible channel found' });
+        }
+      }
+    } catch (guildErr) {
+      console.error(`[PeaceX] [vcTracker] Error generating weekly report for ${guild.name}:`, guildErr);
+      results.failed.push({ id: guild.id, name: guild.name, reason: guildErr.message });
+    }
+  }
+
+  // Send consolidated dispatch summary to Global Bot Owner(s)
+  if (!targetGuildId && (results.deliveredToOwnerDm.length > 0 || results.fallbackToChannel.length > 0 || results.failed.length > 0)) {
+    try {
+      const { getBotOwnerIds } = require('./owners');
+      const botOwnerIds = getBotOwnerIds();
+
+      const summaryEmbed = new EmbedBuilder()
+        .setColor(0x00ff88)
+        .setTitle('📊 Weekly Sunday VC Report — Dispatch Summary')
+        .setDescription(
+          `Automated Sunday weekly voice reports have been processed across all servers:\n\n` +
+          `🌐 **Total Servers:** \`${results.totalGuilds}\`\n` +
+          `📬 **Delivered to Server Owner DM:** \`${results.deliveredToOwnerDm.length}\`\n` +
+          `📢 **Delivered to Fallback Channel (DMs Closed):** \`${results.fallbackToChannel.length}\`\n` +
+          `💤 **No VC Activity:** \`${results.noActivity.length}\`\n` +
+          `⚠️ **Failed:** \`${results.failed.length}\``
+        )
+        .setTimestamp();
+
+      if (results.deliveredToOwnerDm.length > 0) {
+        summaryEmbed.addFields({
+          name: '📬 Delivered to Owner DMs',
+          value: results.deliveredToOwnerDm.slice(0, 15).map((g) => `• **${g.name}** (<@${g.ownerId}>)`).join('\n') || 'None',
+        });
+      }
+
+      if (results.fallbackToChannel.length > 0) {
+        summaryEmbed.addFields({
+          name: '📢 Delivered to Fallback Channels',
+          value: results.fallbackToChannel.slice(0, 10).map((g) => `• **${g.name}** (<#${g.channelId}>)`).join('\n') || 'None',
+        });
+      }
+
+      for (const botOwnerId of botOwnerIds) {
+        try {
+          if (typeof client.users?.fetch === 'function') {
+            const user = await client.users.fetch(botOwnerId);
+            if (user && typeof user.send === 'function') {
+              await user.send({ embeds: [summaryEmbed] });
+            }
+          }
+        } catch {}
+      }
+    } catch (botOwnerErr) {
+      console.warn('[PeaceX] [vcTracker] Failed to send dispatch summary to Bot Owner:', botOwnerErr.message);
+    }
+  }
+
+  return results;
+}
+
 function startWeeklyReportScheduler(client) {
   const tick = async () => {
     const now = new Date();
@@ -494,19 +774,7 @@ function startWeeklyReportScheduler(client) {
     if (client._vcReportStamp === stamp) return;
     client._vcReportStamp = stamp;
 
-    for (const guild of client.guilds.cache.values()) {
-      let owner = guild.owner;
-      if (!owner) owner = await guild.fetchOwner().catch(() => null);
-      if (!owner) continue;
-
-      const chart = generateWeeklyReport(guild, 0);
-      const chunks = splitMessage(`${E.owner} **Sunday VC Activity Report for ${guild.name}**\n\n${chart}`);
-      try {
-        for (const chunk of chunks) await owner.send(chunk);
-      } catch {
-        console.warn(`[PeaceX] [vcTracker] Failed to DM owner of ${guild.name}.`);
-      }
-    }
+    await sendSundayWeeklyReports(client);
   };
 
   setInterval(() => { tick().catch(() => {}); }, 15 * 60 * 1000);
@@ -530,6 +798,8 @@ module.exports = {
   getUserStats,
   getGuildStats,
   generateWeeklyReport,
+  buildWeeklyReportEmbeds,
   splitMessage,
+  sendSundayWeeklyReports,
   startWeeklyReportScheduler,
 };

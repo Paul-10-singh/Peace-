@@ -5,12 +5,13 @@
  * Centralized 4-tier permission system — single source of truth.
  *   EVERYONE (1) -> no restriction
  *   ADMIN    (2) -> admin OR per-guild security-whitelisted member
- *   OWNER    (3) -> main OWNER_ID or users added via /owner add
+ *   OWNER    (3) -> main OWNER_ID, Discord server owner (guild.ownerId), or extra owners
  *   TRUSTED  (4) -> owner OR bot-wide trusted member (data/whitelist.json, /trusted)
  *
  * Commands not listed anywhere default to OWNER (tier 3).
+ * Commands in BOT_OWNER_COMMANDS are strictly reserved for the Global Bot Owner.
  */
-const { isOwner } = require('./owners');
+const { isOwner, isBotOwner, BOT_OWNER_COMMANDS } = require('./owners');
 const { isTrusted } = require('./whitelist');
 const { get, getList } = require('./settings');
 
@@ -73,7 +74,14 @@ function getCommandTier(command, sub = null) {
 // user = { id } | interaction.member | message.member, guild = Guild | null
 // DMs have no whitelist/roles. `user` needs .id; role-gated checks need .roles.
 function hasAccess(user, guild, command, sub = null) {
-  if (isOwner(user.id, guild?.id)) return true;
+  // If the command or subcommand is strictly for the Global Bot Owner
+  if (BOT_OWNER_COMMANDS.has(command) || (sub && BOT_OWNER_COMMANDS.has(sub))) {
+    return isBotOwner(user.id);
+  }
+
+  // Global Bot Owner (everywhere) or Server Owner (in this guild)
+  if (isOwner(user.id, guild?.id, guild)) return true;
+
   const tier = getCommandTier(command, sub);
   if (tier === TIERS.EVERYONE) {
     if (VC_ROLE_LOCKED.has(command)) return hasVcRole(user, guild);

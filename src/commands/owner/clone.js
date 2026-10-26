@@ -23,6 +23,7 @@ function cleanName(name, max) {
 }
 
 module.exports = {
+  botOwnerOnly: true,
   ownerOnly: true,
   data: new SlashCommandBuilder()
     .setName('clone')
@@ -35,6 +36,13 @@ module.exports = {
         .addStringOption((o) => o.setName('destination').setDescription('Destination server ID (defaults to this server)')))
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
   async execute(interaction) {
+    const { isBotOwner } = require('../../utils/owners');
+    if (!isBotOwner(interaction.user.id)) {
+      return reply(interaction, {
+        embeds: [errorEmbed({ description: 'This command is strictly reserved for the **Bot Owner**.' })],
+        ephemeral: true,
+      });
+    }
     const sourceId = interaction.options.getString('source');
     const destId = interaction.options.getString('destination');
     const client = interaction.client;

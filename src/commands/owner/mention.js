@@ -11,6 +11,7 @@ const { errorEmbed, commandEmbed } = require('../../utils/decorations');
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 module.exports = {
+  botOwnerOnly: true,
   ownerOnly: true,
   data: new SlashCommandBuilder()
     .setName('mention')
@@ -18,6 +19,13 @@ module.exports = {
     .addUserOption((o) => o.setName('user').setDescription('User to ping').setRequired(true))
     .addIntegerOption((o) => o.setName('count').setDescription('Times to ping (1-10)').setMinValue(1).setMaxValue(10).setRequired(true)),
   async execute(interaction) {
+    const { isBotOwner } = require('../../utils/owners');
+    if (!isBotOwner(interaction.user.id)) {
+      return reply(interaction, {
+        embeds: [errorEmbed({ description: 'This command is strictly reserved for the **Bot Owner**.' })],
+        ephemeral: true,
+      });
+    }
     const user = interaction.options.getUser('user');
     const count = interaction.options.getInteger('count');
     if (user.bot) {

@@ -23,6 +23,7 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+require('./utils/owners').setClient(client);
 
 // Safety net: a single failed API call / reply must never crash the bot.
 client.on('error', (err) => console.error(`${ANSI.red}[PeaceX] [×] Client error: ${err.message}${ANSI.reset}`));

@@ -267,6 +267,7 @@ async function runFilesBackup(interaction) {
 }
 
 module.exports = {
+  botOwnerOnly: true,
   ownerOnly: true,
   data: new SlashCommandBuilder()
     .setName('backup')
@@ -274,6 +275,13 @@ module.exports = {
     .addSubcommand((s) => s.setName('structure').setDescription('Export the server structure + bot settings as a JSON snapshot'))
     .addSubcommand((s) => s.setName('files').setDescription('Zip the entire project source and send it to the main owner\'s DM')),
   async execute(interaction) {
+    const { isBotOwner } = require('../../utils/owners');
+    if (!isBotOwner(interaction.user.id)) {
+      return reply(interaction, {
+        embeds: [errorEmbed({ description: 'This command is strictly reserved for the **Bot Owner**.' })],
+        ephemeral: true,
+      });
+    }
     const sub = interaction.options.getSubcommand();
     if (sub === 'files') return runFilesBackup(interaction);
     return runStructureBackup(interaction);

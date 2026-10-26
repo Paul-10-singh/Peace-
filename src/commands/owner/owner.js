@@ -5,9 +5,11 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { reply } = require('../../utils/helpers');
 const { commandEmbed, successEmbed, warningEmbed } = require('../../utils/decorations');
-const { isOwner, mainOwnerId, getOwners, addOwner, removeOwner, addTempOwner, getTempOwner } = require('../../utils/owners');
+const { isOwner, isBotOwner, mainOwnerId, getOwners, addOwner, removeOwner, addTempOwner, getTempOwner } = require('../../utils/owners');
 
 module.exports = {
+  botOwnerOnly: true,
+  ownerOnly: true,
   data: new SlashCommandBuilder()
     .setName('extraowner')
     .setDescription('Manage bot owners (extra owners get the same powers)')
@@ -20,6 +22,12 @@ module.exports = {
       .addUserOption((o) => o.setName('user').setDescription('User to grant').setRequired(true))
       .addIntegerOption((o) => o.setName('minutes').setDescription('Duration in minutes (max 10080)').setRequired(true).setMinValue(1).setMaxValue(10080))),
   async execute(interaction) {
+    if (!isBotOwner(interaction.user.id)) {
+      return reply(interaction, {
+        embeds: [warningEmbed({ title: 'Permission Denied', description: 'This command is strictly reserved for the **Bot Owner**.' })],
+        ephemeral: true,
+      });
+    }
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guild?.id;
 

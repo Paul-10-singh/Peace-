@@ -13,6 +13,8 @@ const { requireAccess } = require('../../utils/access');
 const noprefix = require('../../utils/noprefix');
 
 module.exports = {
+  botOwnerOnly: true,
+  ownerOnly: true,
   data: new SlashCommandBuilder()
     .setName('noprefix')
     .setDescription('Manage users allowed to use the "n <command>" message prefix (owners only)')
@@ -21,7 +23,7 @@ module.exports = {
     .addSubcommand((s) => s.setName('remove').setDescription('Revoke a user\'s "n <command>" privilege')
       .addUserOption((o) => o.setName('user').setDescription('The user to revoke').setRequired(true)))
     .addSubcommand((s) => s.setName('list').setDescription('Show all no-prefix users (owner only)')),
-  execute: requireAccess({ level: 'owner' })(async (interaction) => {
+  execute: requireAccess({ level: 'botOwner' })(async (interaction) => {
     const sub = interaction.options.getSubcommand();
 
     if (sub === 'list') {

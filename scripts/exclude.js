@@ -24,12 +24,8 @@ const EXCLUDED_COMMANDS = [
   'snipe',
   'thread',
   'media',
-  'mention',
   'addrole',     // duplicate of addroleall
-  'serverlist',
   'botinfo',
-  'setprofile',
-  'leaveserver',
   // niche utility commands
   'roleicon',
 ];

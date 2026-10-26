@@ -27,6 +27,7 @@ module.exports = {
   name: 'ready',
   async execute(client) {
     await init(client);
+    require('../utils/owners').setClient(client);
 
     const statuses = [
       () => `tag for help`,

@@ -3,12 +3,8 @@ const OWNER_MERGES = [
   'dm',
   'embed',
   'idban',
-  'leaveserver',
-  'mention',
   'removeroll',
   'removerollall',
-  'serverlist',
-  'setprofile',
   'snipe',
 ];
 

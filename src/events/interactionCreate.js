@@ -2,7 +2,7 @@
  * Peace✘ - Discord Bot
  * Developed by Smith.Code
  */
-const { isOwner } = require('../utils/owners');
+const { isOwner, isBotOwner, BOT_OWNER_COMMANDS } = require('../utils/owners');
 const { MessageFlags } = require('discord.js');
 const { reply } = require('../utils/helpers');
 const { setDmNotify } = require('../utils/afk');
@@ -91,7 +91,19 @@ module.exports = {
       const { hasAccess } = require('../utils/permissions');
       const sub = interaction.options.getSubcommand(false) || (legacy ? legacy.subName : null);
       const command = getCommandForInteraction(registeredCommand, sub);
-      const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.member || interaction.user, interaction.guild, command.data.name, sub);
+
+      // Check Bot-Owner-Only restriction first
+      const isBotOnly = command.botOwnerOnly || BOT_OWNER_COMMANDS.has(command.data?.name) || (sub && BOT_OWNER_COMMANDS.has(sub));
+      if (isBotOnly && !isBotOwner(interaction.user.id)) {
+        return interaction.reply({
+          content: '<a:wrong:1550504971303395430> This command is strictly reserved for the **Bot Owner**.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+
+      const allowed = command.ownerOnly
+        ? isOwner(interaction.user.id, interaction.guild?.id, interaction.guild)
+        : hasAccess(interaction.member || interaction.user, interaction.guild, command.data?.name, sub);
       if (!allowed) {
         return interaction.reply({ content: '<a:wrong:1550504971303395430> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
       }
@@ -126,7 +138,16 @@ module.exports = {
           .catch(() => {});
       }
       const { hasAccess } = require('../utils/permissions');
-      const allowed = command.ownerOnly ? isOwner(interaction.user.id, interaction.guild?.id) : hasAccess(interaction.member || interaction.user, interaction.guild, command.data.name, undefined);
+      const isBotOnly = command.botOwnerOnly || BOT_OWNER_COMMANDS.has(command.data?.name);
+      if (isBotOnly && !isBotOwner(interaction.user.id)) {
+        return interaction.reply({
+          content: '<a:wrong:1550504971303395430> This command is strictly reserved for the **Bot Owner**.',
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      const allowed = command.ownerOnly
+        ? isOwner(interaction.user.id, interaction.guild?.id, interaction.guild)
+        : hasAccess(interaction.member || interaction.user, interaction.guild, command.data?.name, undefined);
       if (!allowed) {
         return interaction.reply({ content: '<a:wrong:1550504971303395430> You don\'t have permission to use this command.', flags: MessageFlags.Ephemeral });
       }
