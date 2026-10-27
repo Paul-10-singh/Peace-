@@ -3,6 +3,7 @@
  * Developed by Smith.Code
  */
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { getVoiceConnection } = require('@discordjs/voice');
 const { reply } = require('../../utils/helpers');
 const { errorEmbed, successEmbed } = require('../../utils/decorations');
 
@@ -39,6 +40,15 @@ module.exports = {
     await interaction.deferReply();
 
     try {
+      // If an unmanaged @discordjs/voice connection exists (e.g. from 24/7 or /connect),
+      // tear it down cleanly so DisTube can create and manage its voice connection without VOICE_ALREADY_CREATED
+      const existingConn = getVoiceConnection(interaction.guildId);
+      if (existingConn && !client.distube?.voices?.has(interaction.guildId)) {
+        try {
+          existingConn.destroy();
+        } catch {}
+      }
+
       await client.distube.play(voiceChannel, query, {
         textChannel: interaction.channel,
         member: interaction.member,

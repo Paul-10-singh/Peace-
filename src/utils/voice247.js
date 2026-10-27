@@ -3,12 +3,7 @@
  * Developed by Smith.Code
  *
  * Voice connection helper for 24/7 mode.
- *
- * me.voice.setChannel() only MOVES a bot that is already connected — joining
- * a channel for the first time (or after being kicked) makes the API return
- * "Target user is not connected to voice." (40032). So this helper establishes
- * a real connection via @discordjs/voice's joinVoiceChannel, and only uses
- * setChannel to move an existing live connection.
+ * Integrates with DisTube voice manager when available to prevent VOICE_ALREADY_CREATED collisions.
  */
 const { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } = require('@discordjs/voice');
 
@@ -17,7 +12,7 @@ function waitForReady(connection, timeoutMs = 10000) {
     if (connection.state?.status === VoiceConnectionStatus.Ready) return resolve();
     const timer = setTimeout(() => reject(new Error('Timed out connecting to voice')), timeoutMs);
     const onChange = () => {
-      if (connection.state.status === VoiceConnectionStatus.Ready) {
+      if (connection.state?.status === VoiceConnectionStatus.Ready) {
         clearTimeout(timer);
         connection.off('stateChange', onChange);
         resolve();
@@ -42,6 +37,18 @@ async function connectToVoice(guild, channelId) {
   if (me.voice?.channelId === channel.id) {
     await me.voice.setSelfDeaf(true).catch(() => {});
     return true;
+  }
+
+  // If DisTube is available, connect through DisTube's voice manager so music works seamlessly
+  const client = guild.client;
+  if (client?.distube?.voices) {
+    try {
+      await client.distube.voices.join(channel);
+      await me.voice.setSelfDeaf(true).catch(() => {});
+      return true;
+    } catch (distubeErr) {
+      console.warn(`[PeaceX] [voice247] DisTube voice join failed, falling back to @discordjs/voice: ${distubeErr.message}`);
+    }
   }
 
   let connection = getVoiceConnection(guild.id);
