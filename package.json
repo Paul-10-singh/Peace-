@@ -22,7 +22,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1112.0",
     "@aws-sdk/s3-request-presigner": "^3.1112.0",
-    "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.19.2",
     "@distube/direct-link": "^1.0.1",
     "@distube/soundcloud": "^2.0.4",
@@ -37,6 +36,7 @@
     "ioredis": "^6.0.0",
     "js-yaml": "^5.4.2",
     "libsodium-wrappers": "^0.8.4",
+    "opusscript": "^0.0.8",
     "pino": "^10.3.1"
   },
   "allowScripts": {
@@ -45,7 +45,6 @@
     "esbuild@0.27.7": true,
     "esbuild@0.21.5": true,
     "better-sqlite3@13.0.3": true,
-    "@discordjs/opus@0.10.0": true,
     "ffmpeg-static@5.3.0": true
   },
   "devDependencies": {
