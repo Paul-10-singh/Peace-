@@ -20,11 +20,13 @@ const {
   ButtonStyle,
   EmbedBuilder,
   MessageFlags,
+  StringSelectMenuBuilder,
 } = require('discord.js');
 const ffmpeg = require('ffmpeg-static');
 const { BRAND, footer, successEmbed, errorEmbed, warningEmbed } = require('../utils/decorations');
 const { get: getSetting } = require('../utils/settings');
 const { destroyConnection } = require('../utils/voice247');
+const { E } = require('../utils/emojis');
 
 // Set FFMPEG_PATH environment variable so DisTube always locates the bundled binary
 if (ffmpeg) {
@@ -41,31 +43,33 @@ function getDisTube() {
 function buildMusicButtons(queue) {
   const isPaused = queue.paused;
   const loopMode = queue.repeatMode; // 0 = off, 1 = song, 2 = queue
-  const loopLabel = loopMode === 1 ? '🔂 Song' : loopMode === 2 ? '🔁 Queue' : '🔁 Loop';
+  const loopLabel = loopMode === 1 ? 'Track' : loopMode === 2 ? 'Queue' : 'Loop';
+  const loopEmoji = loopMode === 1 ? E.loop : loopMode === 2 ? E.Repeat : E.loop;
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('music_pause_resume')
-      .setEmoji(isPaused ? '▶️' : '⏸️')
+      .setEmoji(isPaused ? E.play : E.pause)
       .setLabel(isPaused ? 'Resume' : 'Pause')
       .setStyle(isPaused ? ButtonStyle.Success : ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('music_skip')
-      .setEmoji('⏭️')
+      .setEmoji(E.skip)
       .setLabel('Skip')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_stop')
-      .setEmoji('⏹️')
+      .setEmoji(E.wrong)
       .setLabel('Stop')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
       .setCustomId('music_loop')
+      .setEmoji(loopEmoji)
       .setLabel(loopLabel)
       .setStyle(loopMode > 0 ? ButtonStyle.Success : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_shuffle')
-      .setEmoji('🔀')
+      .setEmoji(E.shuffle)
       .setLabel('Shuffle')
       .setStyle(ButtonStyle.Secondary)
   );
@@ -73,18 +77,23 @@ function buildMusicButtons(queue) {
   const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('music_voldown')
-      .setEmoji('🔉')
+      .setEmoji(E.volumedown)
       .setLabel('-10%')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_volup')
-      .setEmoji('🔊')
+      .setEmoji(E.volumeup)
       .setLabel('+10%')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_queue')
-      .setEmoji('📜')
+      .setEmoji(E.music)
       .setLabel('Queue')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('music_filters_menu')
+      .setEmoji(E.audioFilter)
+      .setLabel('Filters')
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -92,33 +101,33 @@ function buildMusicButtons(queue) {
 }
 
 function buildNowPlayingEmbed(queue, song) {
-  const loopMode = queue.repeatMode === 1 ? 'Song Repeat' : queue.repeatMode === 2 ? 'Queue Repeat' : 'Off';
-  const filter = queue.filters.names.join(', ') || 'None';
+  const loopMode = queue.repeatMode === 1 ? `${E.loop} Track Repeat` : queue.repeatMode === 2 ? `${E.Repeat} Queue Repeat` : 'Off';
+  const pausedText = queue.paused ? `${E.pause} paused` : `${E.play} playing`;
+  const currentFormatted = queue.formattedCurrentTime || '0:00';
+  const totalFormatted = song.formattedDuration || '∞';
+  const uploaderText = song.uploader?.name ? ` — **${song.uploader.name}**` : '';
+  const userTag = song.user?.id ? `<@${song.user.id}>` : (song.user?.username || 'Unknown');
 
-  const userAvatar = typeof song.user?.displayAvatarURL === 'function'
-    ? song.user.displayAvatarURL({ dynamic: true })
-    : undefined;
-
-  const authorObj = { name: '🎵 Now Playing' };
-  if (userAvatar) authorObj.iconURL = userAvatar;
+  const authorObj = {
+    name: 'Now Playing',
+    iconURL: queue.client?.user?.displayAvatarURL?.({ dynamic: true }) || undefined,
+  };
 
   const embed = new EmbedBuilder()
-    .setColor(BRAND?.primary || 0x2b2d31)
+    .setColor(0x2b2d31)
     .setAuthor(authorObj)
-    .setTitle(song.name ? String(song.name).slice(0, 256) : 'Unknown Track')
-    .setURL(song.url || 'https://discord.com')
     .setDescription(
-      `⏱️ **Duration:** \`${song.formattedDuration || 'Live Stream'}\`\n` +
-      `👤 **Requested by:** <@${song.user?.id || 'Unknown'}>\n` +
-      `🔊 **Volume:** \`${queue.volume}%\` ┆ 🔁 **Loop:** \`${loopMode}\` ┆ 🎛️ **Filter:** \`${filter}\``
+      `[**${song.name ? String(song.name).slice(0, 200) : 'Unknown Track'}**](${song.url || 'https://discord.com'})${uploaderText}\n` +
+      `\`${currentFormatted} / ${totalFormatted}\` ${pausedText} · ${loopMode}\n` +
+      `${E.volumeup} Volume \`${queue.volume}%\` · Requested by ${userTag}`
     )
+    .setFooter({ text: `Peace✘ · ${song.url ? 'Music' : 'Local track'}` })
     .setTimestamp();
 
   if (song.thumbnail) {
     embed.setThumbnail(song.thumbnail);
   }
 
-  embed.setFooter(footer(`Queue: ${queue.songs.length} song(s) ┆ Peace✘ Music`));
   return embed;
 }
 
@@ -249,15 +258,16 @@ async function handleMusicButton(interaction, client) {
       case 'music_pause_resume': {
         if (queue.paused) {
           queue.resume();
-          await interaction.reply({ content: '▶️ Resumed playback.', flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: `${E.play} Resumed playback.`, flags: MessageFlags.Ephemeral });
         } else {
           queue.pause();
-          await interaction.reply({ content: '⏸️ Paused playback.', flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: `${E.pause} Paused playback.`, flags: MessageFlags.Ephemeral });
         }
         // Update now playing buttons if message exists
         if (queue._nowPlayingMessage?.edit && queue.songs[0]) {
+          const embed = buildNowPlayingEmbed(queue, queue.songs[0]);
           const components = buildMusicButtons(queue);
-          queue._nowPlayingMessage.edit({ components }).catch(() => {});
+          queue._nowPlayingMessage.edit({ embeds: [embed], components }).catch(() => {});
         }
         break;
       }
@@ -265,10 +275,10 @@ async function handleMusicButton(interaction, client) {
       case 'music_skip': {
         if (queue.songs.length <= 1 && !queue.autoplay) {
           queue.stop();
-          await interaction.reply({ content: '⏭️ Skipped track. No more songs left in queue.', flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: `${E.skip} Skipped track. No more songs left in queue.`, flags: MessageFlags.Ephemeral });
         } else {
           await queue.skip();
-          await interaction.reply({ content: '⏭️ Skipped to the next track.', flags: MessageFlags.Ephemeral });
+          await interaction.reply({ content: `${E.skip} Skipped to the next track.`, flags: MessageFlags.Ephemeral });
         }
         break;
       }
@@ -280,7 +290,7 @@ async function handleMusicButton(interaction, client) {
           destroyConnection(interaction.guild);
           interaction.guild.members.me?.voice?.disconnect().catch(() => {});
         }
-        await interaction.reply({ content: '⏹️ Stopped music playback and cleared the queue.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `${E.wrong} Stopped music playback and cleared the queue.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
@@ -289,47 +299,101 @@ async function handleMusicButton(interaction, client) {
         const current = queue.repeatMode;
         const next = (current + 1) % 3;
         queue.setRepeatMode(next);
-        const modeName = next === 1 ? 'Song Repeat 🔂' : next === 2 ? 'Queue Repeat 🔁' : 'Disabled ❌';
+        const modeName = next === 1 ? `${E.loop} Track Repeat` : next === 2 ? `${E.Repeat} Queue Repeat` : 'Disabled';
         await interaction.reply({ content: `🔁 Loop mode set to: **${modeName}**`, flags: MessageFlags.Ephemeral });
         if (queue._nowPlayingMessage?.edit && queue.songs[0]) {
+          const embed = buildNowPlayingEmbed(queue, queue.songs[0]);
           const components = buildMusicButtons(queue);
-          queue._nowPlayingMessage.edit({ components }).catch(() => {});
+          queue._nowPlayingMessage.edit({ embeds: [embed], components }).catch(() => {});
         }
         break;
       }
 
       case 'music_shuffle': {
         queue.shuffle();
-        await interaction.reply({ content: '🔀 Shuffled the song queue.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `${E.shuffle} Shuffled the song queue.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
       case 'music_voldown': {
         const newVol = Math.max(0, queue.volume - 10);
         queue.setVolume(newVol);
-        await interaction.reply({ content: `🔉 Volume decreased to **${newVol}%**.`, flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `${E.volumedown} Volume decreased to **${newVol}%**.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
       case 'music_volup': {
         const newVol = Math.min(100, queue.volume + 10);
         queue.setVolume(newVol);
-        await interaction.reply({ content: `🔊 Volume increased to **${newVol}%**.`, flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: `${E.volumeup} Volume increased to **${newVol}%**.`, flags: MessageFlags.Ephemeral });
         break;
       }
 
       case 'music_queue': {
         const songs = queue.songs;
-        const list = songs.slice(0, 10).map((s, i) => `${i === 0 ? '▶️ **Now:**' : `\`${i}.\``} [${s.name}](${s.url}) — \`${s.formattedDuration}\``);
-        const extra = songs.length > 10 ? `\n...and ${songs.length - 10} more song(s)` : '';
+        const current = songs[0];
+        const upcoming = songs.slice(1, 10);
+        const currentReq = current.user ? `<@${current.user.id}>` : 'Unknown';
+        const currentLine = `-# ${E.dot} 1: ${(current.name || 'Unknown Track').slice(0, 30)} | ${currentReq} ${current.formattedDuration} ${E.yes}`;
+
+        const upcomingLines = upcoming.map((t, i) => {
+          const req = t.user ? `<@${t.user.id}>` : 'Unknown';
+          return `-# ${E.dot} ${i + 2}: ${(t.name || 'Unknown Track').slice(0, 30)} | ${req} ${t.formattedDuration}`;
+        });
+
+        const list = [currentLine, ...upcomingLines];
+        const extra = songs.length > 10 ? `\n...and **${songs.length - 10}** more track(s)` : '';
 
         const queueEmbed = new EmbedBuilder()
-          .setColor(BRAND?.primary || 0x2b2d31)
-          .setTitle(`📜 Queue for ${interaction.guild.name}`)
+          .setColor(0x353535)
+          .setAuthor({ name: 'Queue For Current Player', iconURL: interaction.client.user.displayAvatarURL() })
           .setDescription(list.join('\n') + extra)
-          .setFooter(footer(`Total: ${songs.length} tracks ┆ Total Duration: ${queue.formattedDuration}`));
+          .setFooter({ text: `Total: ${songs.length} tracks ┆ ${queue.formattedDuration}` });
 
         await interaction.reply({ embeds: [queueEmbed], flags: MessageFlags.Ephemeral });
+        break;
+      }
+
+      case 'music_filters_menu': {
+        const selectMenu = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('music_filter_select')
+            .setPlaceholder(`Select Filter`)
+            .addOptions([
+              { label: 'Reset (Clear Filters)', value: 'off', emoji: E.Autoplay },
+              { label: 'BassBoost', value: 'bassboost', emoji: E.volumeup },
+              { label: '8D Audio', value: '8d', emoji: '🌀' },
+              { label: 'Nightcore', value: 'nightcore', emoji: E.nightmode },
+              { label: 'Vaporwave', value: 'vaporwave', emoji: E.sparkles },
+              { label: 'Karaoke', value: 'karaoke', emoji: '🎤' },
+              { label: 'Tremolo', value: 'tremolo', emoji: '〰️' },
+              { label: 'Vibrato', value: 'vibrato', emoji: E.music },
+              { label: 'Surround', value: 'surround', emoji: E.volumeup },
+            ])
+        );
+        await interaction.reply({
+          content: `${E.audioFilter} Choose an audio filter to apply:`,
+          components: [selectMenu],
+          flags: MessageFlags.Ephemeral,
+        });
+        break;
+      }
+
+      case 'music_filter_select': {
+        const preset = interaction.values?.[0] || 'off';
+        if (preset === 'off') {
+          queue.filters.clear();
+          await interaction.reply({ content: `${E.audioFilter} All audio filters cleared.`, flags: MessageFlags.Ephemeral });
+        } else {
+          queue.filters.clear();
+          queue.filters.add(preset);
+          await interaction.reply({ content: `${E.audioFilter} Applied filter: **${preset}**`, flags: MessageFlags.Ephemeral });
+        }
+        if (queue._nowPlayingMessage?.edit && queue.songs[0]) {
+          const embed = buildNowPlayingEmbed(queue, queue.songs[0]);
+          const components = buildMusicButtons(queue);
+          queue._nowPlayingMessage.edit({ embeds: [embed], components }).catch(() => {});
+        }
         break;
       }
 

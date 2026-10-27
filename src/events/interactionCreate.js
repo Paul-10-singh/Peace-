@@ -288,6 +288,11 @@ module.exports = {
     }
 
     if (interaction.isStringSelectMenu()) {
+      if (interaction.customId.startsWith('music_')) {
+        const { handleMusicButton } = require('../music/player');
+        await handleMusicButton(interaction, client);
+        return;
+      }
       if (interaction.customId === 'namestyle_font') {
         const { handleNameStyleComponent } = require('../utils/nameStylePanel');
         await handleNameStyleComponent(interaction);

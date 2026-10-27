@@ -57,6 +57,7 @@ describe('Music System & Interactive Button Controls', () => {
     expect(row2Buttons).toContain('music_voldown');
     expect(row2Buttons).toContain('music_volup');
     expect(row2Buttons).toContain('music_queue');
+    expect(row2Buttons).toContain('music_filters_menu');
   });
 
   it('builds now playing embed with track metadata and status', () => {
@@ -69,12 +70,11 @@ describe('Music System & Interactive Button Controls', () => {
     };
 
     const embed = buildNowPlayingEmbed(mockQueue, mockQueue.songs[0]);
-    expect(embed.data.title).toBe('Test Song');
-    expect(embed.data.url).toBe('https://youtube.com');
+    expect(embed.data.description).toContain('Test Song');
+    expect(embed.data.description).toContain('https://youtube.com');
     expect(embed.data.description).toContain('3:30');
     expect(embed.data.description).toContain('80%');
-    expect(embed.data.description).toContain('Song Repeat');
-    expect(embed.data.description).toContain('bassboost');
+    expect(embed.data.description).toContain('Track Repeat');
   });
 
   it('rejects button interaction if member is not in the same voice channel', async () => {

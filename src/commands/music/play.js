@@ -68,8 +68,8 @@ module.exports = {
       const userMention = `<@${interaction.user.id}>`;
 
       const description = isPlaylist
-        ? `✔ | added to queue [${songTitle}](${songUrl}) (${resolved.songs?.length || 0} tracks) by ${userMention}`
-        : `✔ | added to queue [${songTitle}](${songUrl}) by ${userMention}`;
+        ? `<a:music2:1550835169399803925> | added to queue [${songTitle}](${songUrl}) (${resolved.songs?.length || 0} tracks) by ${userMention}`
+        : `<a:music2:1550835169399803925> | added to queue [${songTitle}](${songUrl}) by ${userMention}`;
 
       const queueEmbed = new EmbedBuilder()
         .setColor(0xFFFFFF)
