@@ -67,9 +67,14 @@ function numberEmojiName(number) {
   return NUMBER_NAMES[abs];
 }
 
-function buildSuccessReactions({ channel, number, previousNumber }) {
+function buildSuccessReactions(channelOrObj, maybeNumber) {
+  const channel = channelOrObj?.channel || channelOrObj;
+  const number = typeof maybeNumber === 'number' ? maybeNumber : channelOrObj?.number;
   if (!channel || channel.onSuccess === 'none') return [];
-  return ['1550504846199758928'];
+  const reactions = ['1550504846199758928'];
+  const name = numberEmojiName(number);
+  if (name) reactions.push(name);
+  return reactions;
 }
 
 /* ------------------------------------------------------------------ */

@@ -37,7 +37,7 @@ describe('Music System & Interactive Button Controls', () => {
     }
   });
 
-  it('builds interactive button rows with correct custom IDs', () => {
+  it('builds interactive button rows with correct custom IDs, emoji-only for controls, and label-only for stop', () => {
     const mockQueue = {
       paused: false,
       repeatMode: 0,
@@ -58,6 +58,21 @@ describe('Music System & Interactive Button Controls', () => {
     expect(row2Buttons).toContain('music_volup');
     expect(row2Buttons).toContain('music_queue');
     expect(row2Buttons).toContain('music_filters_menu');
+
+    // Verify Stop button has letters only (no emoji)
+    const stopBtn = rows[0].components.find((c) => c.data.custom_id === 'music_stop');
+    expect(stopBtn.data.label).toBe('Stop');
+    expect(stopBtn.data.emoji).toBeUndefined();
+
+    // Verify all other buttons have emojis only (no label / letters removed)
+    const emojiOnlyButtons = [
+      ...rows[0].components.filter((c) => c.data.custom_id !== 'music_stop'),
+      ...rows[1].components,
+    ];
+    for (const btn of emojiOnlyButtons) {
+      expect(btn.data.label).toBeUndefined();
+      expect(btn.data.emoji).toBeDefined();
+    }
   });
 
   it('builds now playing embed with track metadata and status', () => {

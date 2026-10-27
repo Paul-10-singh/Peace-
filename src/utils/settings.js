@@ -11,7 +11,13 @@ const FILE = path.join(DATA_DIR, 'settings.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(FILE)) fs.writeFileSync(FILE, '{}', 'utf8');
 
-let cache = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+let cache = {};
+try {
+  const content = fs.readFileSync(FILE, 'utf8');
+  cache = content ? JSON.parse(content) : {};
+} catch {
+  cache = {};
+}
 
 const DEFAULTS = {
   welcome: { enabled: false, channelId: null, message: null, roleId: null },

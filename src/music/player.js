@@ -43,34 +43,28 @@ function getDisTube() {
 function buildMusicButtons(queue) {
   const isPaused = queue.paused;
   const loopMode = queue.repeatMode; // 0 = off, 1 = song, 2 = queue
-  const loopLabel = loopMode === 1 ? 'Track' : loopMode === 2 ? 'Queue' : 'Loop';
   const loopEmoji = loopMode === 1 ? E.loop : loopMode === 2 ? E.Repeat : E.loop;
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('music_pause_resume')
       .setEmoji(isPaused ? E.play : E.pause)
-      .setLabel(isPaused ? 'Resume' : 'Pause')
       .setStyle(isPaused ? ButtonStyle.Success : ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('music_skip')
       .setEmoji(E.skip)
-      .setLabel('Skip')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_stop')
-      .setEmoji(E.wrong)
       .setLabel('Stop')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
       .setCustomId('music_loop')
       .setEmoji(loopEmoji)
-      .setLabel(loopLabel)
       .setStyle(loopMode > 0 ? ButtonStyle.Success : ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_shuffle')
       .setEmoji(E.shuffle)
-      .setLabel('Shuffle')
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -78,22 +72,18 @@ function buildMusicButtons(queue) {
     new ButtonBuilder()
       .setCustomId('music_voldown')
       .setEmoji(E.volumedown)
-      .setLabel('-10%')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_volup')
       .setEmoji(E.volumeup)
-      .setLabel('+10%')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_queue')
       .setEmoji(E.music)
-      .setLabel('Queue')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId('music_filters_menu')
       .setEmoji(E.audioFilter)
-      .setLabel('Filters')
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -151,6 +141,11 @@ function initMusic(client) {
   // DisTube Events
   distubeInstance.on('playSong', async (queue, song) => {
     try {
+      if (queue._nowPlayingMessage) {
+        const prevMsg = queue._nowPlayingMessage;
+        queue._nowPlayingMessage = null;
+        prevMsg.delete().catch(() => {});
+      }
       const embed = buildNowPlayingEmbed(queue, song);
       const components = buildMusicButtons(queue);
       const msg = await queue.textChannel?.send({ embeds: [embed], components });
@@ -160,16 +155,37 @@ function initMusic(client) {
     }
   });
 
+  distubeInstance.on('finishSong', async (queue, song) => {
+    if (queue._nowPlayingMessage) {
+      const prevMsg = queue._nowPlayingMessage;
+      queue._nowPlayingMessage = null;
+      prevMsg.delete().catch(() => {});
+    }
+  });
+
   // Song queue notifications are handled directly by the /play command reply
   distubeInstance.on('addSong', () => {});
   distubeInstance.on('addList', () => {});
 
   distubeInstance.on('finish', (queue) => {
+    if (queue._nowPlayingMessage) {
+      const prevMsg = queue._nowPlayingMessage;
+      queue._nowPlayingMessage = null;
+      prevMsg.delete().catch(() => {});
+    }
     const { channelId } = getSetting(queue.id, 'vc247') || {};
     if (!channelId) {
       queue.textChannel?.send({
         embeds: [warningEmbed({ title: 'Queue Finished', description: 'Queue has ended. Use `/play` to play more songs!' })],
       }).catch(() => {});
+    }
+  });
+
+  distubeInstance.on('deleteQueue', (queue) => {
+    if (queue._nowPlayingMessage) {
+      const prevMsg = queue._nowPlayingMessage;
+      queue._nowPlayingMessage = null;
+      prevMsg.delete().catch(() => {});
     }
   });
 
@@ -284,6 +300,11 @@ async function handleMusicButton(interaction, client) {
       }
 
       case 'music_stop': {
+        if (queue._nowPlayingMessage) {
+          const prevMsg = queue._nowPlayingMessage;
+          queue._nowPlayingMessage = null;
+          prevMsg.delete().catch(() => {});
+        }
         queue.stop();
         const { channelId } = getSetting(interaction.guildId, 'vc247') || {};
         if (!channelId) {
