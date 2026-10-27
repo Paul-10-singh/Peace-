@@ -32,6 +32,8 @@ const EVERYONE = new Set([
   'stop', 'disconnect',
   // voice activity stats
   'vcstats', 'vcstats_custom', 'vchart', 'vctask',
+  // music
+  'play', 'pause', 'resume', 'skip', 'queue', 'nowplaying', 'volume', 'loop', 'shuffle', 'filter', 'seek',
 ]);
 
 // Commands gated by the server-specific whitelist (all subcommands if any).

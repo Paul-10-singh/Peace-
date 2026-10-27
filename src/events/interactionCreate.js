@@ -171,6 +171,11 @@ module.exports = {
     }
 
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('music_')) {
+        const { handleMusicButton } = require('../music/player');
+        await handleMusicButton(interaction, client);
+        return;
+      }
       if (interaction.customId.startsWith('incident:')) {
         const { handleButton } = require('../security/playbooks/runner');
         await handleButton(interaction, client);
