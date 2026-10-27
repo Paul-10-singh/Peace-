@@ -13,7 +13,7 @@ const { DisTube } = require('distube');
 const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
 const { DirectLinkPlugin } = require('@distube/direct-link');
-const { YtDlpPlugin } = require('@distube/yt-dlp');
+const { YouTubePlugin } = require('./youtubePlugin');
 const {
   ActionRowBuilder,
   ButtonBuilder,
@@ -130,9 +130,9 @@ function initMusic(client) {
     emitAddListWhenCreatingQueue: false,
     plugins: [
       new SpotifyPlugin(),
+      new YouTubePlugin(),
       new SoundCloudPlugin(),
       new DirectLinkPlugin(),
-      new YtDlpPlugin(),
     ],
   });
 

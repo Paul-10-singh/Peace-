@@ -64,8 +64,14 @@ module.exports = {
       });
     } catch (err) {
       console.error('[PeaceX] [Play Command Error]:', err);
+      let desc = `Could not play track: \`${err.message.slice(0, 200)}\``;
+      if (err.errorCode === 'NO_RESULT') {
+        desc = `No tracks found for: **${query}**\nTry searching with song title and artist name.`;
+      } else if (err.errorCode === 'NOT_SUPPORTED_URL') {
+        desc = `The provided URL is not supported.\nSupported sources: **YouTube**, **Spotify**, **SoundCloud**, or direct audio link.`;
+      }
       return interaction.editReply({
-        embeds: [errorEmbed({ title: 'Playback Failed', description: `Could not play track: \`${err.message.slice(0, 200)}\`` })],
+        embeds: [errorEmbed({ title: 'Playback Failed', description: desc })],
       });
     }
   },

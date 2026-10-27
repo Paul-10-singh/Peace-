@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildMusicButtons, buildNowPlayingEmbed, handleMusicButton } from '../src/music/player';
+import { YouTubePlugin } from '../src/music/youtubePlugin';
 import playCommand from '../src/commands/music/play';
 import pauseCommand from '../src/commands/music/pause';
 import resumeCommand from '../src/commands/music/resume';
@@ -104,5 +105,32 @@ describe('Music System & Interactive Button Controls', () => {
         content: expect.stringContaining('same voice channel'),
       })
     );
+  });
+
+  it('validates and extracts YouTube URLs cleanly with YouTubePlugin', async () => {
+    const plugin = new YouTubePlugin();
+    expect(plugin.type).toBe('info-extractor');
+
+    // Positive validations
+    expect(plugin.validate('https://www.youtube.com/watch?v=z5y8Clp_TdE')).toBe(true);
+    expect(plugin.validate('https://youtu.be/z5y8Clp_TdE')).toBe(true);
+    expect(plugin.validate('https://www.youtube.com/shorts/z5y8Clp_TdE')).toBe(true);
+    expect(plugin.validate('https://music.youtube.com/watch?v=z5y8Clp_TdE')).toBe(true);
+
+    // Negative validations
+    expect(plugin.validate('https://open.spotify.com/track/123')).toBe(false);
+    expect(plugin.validate('https://soundcloud.com/artist/track')).toBe(false);
+    expect(plugin.validate('not a url')).toBe(false);
+
+    // Resolution & search query generation
+    const song = await plugin.resolve('https://www.youtube.com/watch?v=z5y8Clp_TdE');
+    expect(song.source).toBe('youtube');
+    expect(song.stream.playFromSource).toBe(false);
+    expect(song.url).toBe('https://www.youtube.com/watch?v=z5y8Clp_TdE');
+    expect(song.thumbnail).toContain('z5y8Clp_TdE');
+
+    const query = plugin.createSearchQuery(song);
+    expect(typeof query).toBe('string');
+    expect(query.length).toBeGreaterThan(0);
   });
 });
