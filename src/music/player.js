@@ -24,6 +24,7 @@ const {
 const ffmpeg = require('ffmpeg-static');
 const { BRAND, footer, successEmbed, errorEmbed, warningEmbed } = require('../utils/decorations');
 const { get: getSetting } = require('../utils/settings');
+const { destroyConnection } = require('../utils/voice247');
 
 // Set FFMPEG_PATH environment variable so DisTube always locates the bundled binary
 if (ffmpeg) {
@@ -181,11 +182,12 @@ function initMusic(client) {
     }
   });
 
-  distubeInstance.on('error', (channel, error) => {
-    console.error('[PeaceX] [Music Error]:', error.message);
-    if (channel?.send) {
-      channel.send({
-        embeds: [errorEmbed({ title: 'Music Playback Error', description: `An error occurred: \`${error.message.slice(0, 150)}\`` })],
+  distubeInstance.on('error', (error, queue, song) => {
+    console.error('[PeaceX] [Music Error]:', error?.message || error);
+    const textChannel = queue?.textChannel;
+    if (textChannel?.send) {
+      textChannel.send({
+        embeds: [errorEmbed({ title: 'Music Playback Error', description: `An error occurred: \`${(error?.message || String(error)).slice(0, 150)}\`` })],
       }).catch(() => {});
     }
   });
@@ -213,6 +215,7 @@ function initMusic(client) {
           if (currentHumans === 0 && !current247) {
             const queue = distubeInstance?.getQueue(guild.id);
             if (queue) queue.stop();
+            destroyConnection(guild);
             guild.members.me?.voice?.disconnect().catch(() => {});
             queue?.textChannel?.send({
               embeds: [warningEmbed({ title: 'Voice Channel Empty', description: 'Left the voice channel because everyone left.' })],
@@ -292,6 +295,7 @@ async function handleMusicButton(interaction, client) {
         queue.stop();
         const { channelId } = getSetting(interaction.guildId, 'vc247') || {};
         if (!channelId) {
+          destroyConnection(interaction.guild);
           interaction.guild.members.me?.voice?.disconnect().catch(() => {});
         }
         await interaction.reply({ content: '⏹️ Stopped music playback and cleared the queue.', flags: MessageFlags.Ephemeral });

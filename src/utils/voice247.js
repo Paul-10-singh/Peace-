@@ -83,13 +83,35 @@ async function connectToVoice(guild, channelId) {
 /** Disconnect the bot from voice and tear down its connection. */
 function disconnectFromVoice(guild, reason = 'Disconnected') {
   if (!guild?.members?.me) return Promise.resolve();
+  destroyConnection(guild);
   return guild.members.me.voice.disconnect(reason).catch(() => {});
 }
 
 function destroyConnection(guild) {
+  if (!guild) return;
+  const client = guild.client;
+
+  // 1. Leave and unregister from DisTube voice manager
   try {
-    const connection = getVoiceConnection(guild?.id);
-    if (connection) connection.destroy();
+    if (client?.distube?.voices?.has(guild.id)) {
+      client.distube.voices.leave(guild.id);
+    }
+  } catch {}
+
+  // 2. Destroy @discordjs/voice connection created with group (DisTube style)
+  try {
+    const connWithGroup = getVoiceConnection(guild.id, client?.user?.id);
+    if (connWithGroup && connWithGroup.state?.status !== VoiceConnectionStatus.Destroyed) {
+      connWithGroup.destroy();
+    }
+  } catch {}
+
+  // 3. Destroy default @discordjs/voice connection without group
+  try {
+    const conn = getVoiceConnection(guild.id);
+    if (conn && conn.state?.status !== VoiceConnectionStatus.Destroyed) {
+      conn.destroy();
+    }
   } catch {}
 }
 

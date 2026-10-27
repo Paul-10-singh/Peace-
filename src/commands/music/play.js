@@ -3,9 +3,9 @@
  * Developed by Smith.Code
  */
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { getVoiceConnection } = require('@discordjs/voice');
 const { reply } = require('../../utils/helpers');
 const { errorEmbed, successEmbed } = require('../../utils/decorations');
+const { destroyConnection } = require('../../utils/voice247');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -40,13 +40,15 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      // If an unmanaged @discordjs/voice connection exists (e.g. from 24/7 or /connect),
-      // tear it down cleanly so DisTube can create and manage its voice connection without VOICE_ALREADY_CREATED
-      const existingConn = getVoiceConnection(interaction.guildId);
-      if (existingConn && !client.distube?.voices?.has(interaction.guildId)) {
-        try {
-          existingConn.destroy();
-        } catch {}
+      const me = interaction.guild.members.me;
+      const currentBotChannelId = me?.voice?.channelId;
+      const distubeVoice = client.distube?.voices?.get(interaction.guildId);
+      const isVoiceReady = distubeVoice?.connection?.state?.status === 'ready';
+
+      // If the bot is not currently connected to voice, or the existing connection is not ready,
+      // or the bot is in a different channel, tear down stale connection states cleanly
+      if (!currentBotChannelId || !isVoiceReady || currentBotChannelId !== voiceChannel.id) {
+        destroyConnection(interaction.guild);
       }
 
       await client.distube.play(voiceChannel, query, {
@@ -69,6 +71,8 @@ module.exports = {
         desc = `No tracks found for: **${query}**\nTry searching with song title and artist name.`;
       } else if (err.errorCode === 'NOT_SUPPORTED_URL') {
         desc = `The provided URL is not supported.\nSupported sources: **YouTube**, **Spotify**, **SoundCloud**, or direct audio link.`;
+      } else if (err.errorCode === 'VOICE_CONNECT_FAILED') {
+        desc = `Could not connect to the voice channel in time. Please check bot permissions and try again.`;
       }
       return interaction.editReply({
         embeds: [errorEmbed({ title: 'Playback Failed', description: desc })],

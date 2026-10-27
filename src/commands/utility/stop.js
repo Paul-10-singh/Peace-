@@ -38,8 +38,8 @@ module.exports = {
     }
 
     try {
-      await me.voice.disconnect('Stopped by user');
       destroyConnection(guild);
+      await me.voice.disconnect('Stopped by user');
       return reply(interaction, { embeds: [successEmbed({ description: 'Stopped music and left the voice channel.' })] });
     } catch (err) {
       return reply(interaction, { embeds: [errorEmbed({ description: `Could not disconnect: ${err.message}` })], ephemeral: true });

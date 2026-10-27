@@ -48,10 +48,10 @@ module.exports = {
     if (mode === 'end') {
       const { channelId } = get(guild.id, 'vc247');
       setSetting(guild.id, 'vc247', { channelId: null });
+      destroyConnection(guild);
       if (channelId && me.voice?.channelId === channelId) {
         await me.voice.disconnect('24/7 mode ended').catch(() => {});
       }
-      destroyConnection(guild);
       return reply(interaction, {
         embeds: [successEmbed({ title: '24/7 ended', description: '24/7 mode is off — the bot is free and may leave the voice channel again.' })],
       });
