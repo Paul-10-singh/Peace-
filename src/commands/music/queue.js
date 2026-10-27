@@ -41,7 +41,7 @@ module.exports = {
     }
 
     const embed = new EmbedBuilder()
-      .setColor(BRAND?.primary || 0x2b2d31)
+      .setColor(0xFFFFFF)
       .setTitle(`🎶 Music Queue — ${interaction.guild.name}`)
       .setDescription(lines.join('\n'))
       .setFooter(footer(`Total: ${songs.length} tracks ┆ Total Duration: ${queue.formattedDuration}`))

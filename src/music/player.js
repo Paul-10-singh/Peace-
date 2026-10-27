@@ -151,27 +151,9 @@ function initMusic(client) {
     }
   });
 
-  distubeInstance.on('addSong', (queue, song) => {
-    try {
-      const embed = successEmbed({
-        title: '🎶 Track Added to Queue',
-        description: `[**${song.name}**](${song.url})\n⏱️ **Duration:** \`${song.formattedDuration}\` ┆ 👤 **By:** <@${song.user?.id}>`,
-      });
-      if (song.thumbnail) embed.setThumbnail(song.thumbnail);
-      queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
-    } catch {}
-  });
-
-  distubeInstance.on('addList', (queue, playlist) => {
-    try {
-      const embed = successEmbed({
-        title: '📑 Playlist Added to Queue',
-        description: `[**${playlist.name}**](${playlist.url})\n🎵 **Tracks:** \`${playlist.songs.length}\` ┆ ⏱️ **Duration:** \`${playlist.formattedDuration}\``,
-      });
-      if (playlist.thumbnail) embed.setThumbnail(playlist.thumbnail);
-      queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
-    } catch {}
-  });
+  // Song queue notifications are handled directly by the /play command reply
+  distubeInstance.on('addSong', () => {});
+  distubeInstance.on('addList', () => {});
 
   distubeInstance.on('finish', (queue) => {
     const { channelId } = getSetting(queue.id, 'vc247') || {};

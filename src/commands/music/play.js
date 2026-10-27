@@ -2,9 +2,10 @@
  * Peace✘ - Music Command: /play
  * Developed by Smith.Code
  */
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { Playlist } = require('distube');
 const { reply } = require('../../utils/helpers');
-const { errorEmbed, successEmbed } = require('../../utils/decorations');
+const { errorEmbed } = require('../../utils/decorations');
 const { destroyConnection } = require('../../utils/voice247');
 
 module.exports = {
@@ -51,18 +52,31 @@ module.exports = {
         destroyConnection(interaction.guild);
       }
 
-      await client.distube.play(voiceChannel, query, {
+      // Resolve track metadata first to construct the minimalist queue notification embed
+      const resolved = await client.distube.handler.resolve(query, {
+        member: interaction.member,
+      });
+
+      await client.distube.play(voiceChannel, resolved, {
         textChannel: interaction.channel,
         member: interaction.member,
       });
 
+      const isPlaylist = resolved instanceof Playlist || Array.isArray(resolved?.songs);
+      const songTitle = (resolved.name ? String(resolved.name).slice(0, 150) : 'Unknown Track').trim();
+      const songUrl = resolved.url || 'https://discord.com';
+      const userMention = `<@${interaction.user.id}>`;
+
+      const description = isPlaylist
+        ? `✔ | added to queue [${songTitle}](${songUrl}) (${resolved.songs?.length || 0} tracks) by ${userMention}`
+        : `✔ | added to queue [${songTitle}](${songUrl}) by ${userMention}`;
+
+      const queueEmbed = new EmbedBuilder()
+        .setColor(0xFFFFFF)
+        .setDescription(description);
+
       return interaction.editReply({
-        embeds: [
-          successEmbed({
-            title: '🔍 Request Dispatched',
-            description: `Searching and queuing: **${query}**\n*(Playback will start in <#${voiceChannel.id}>)*`,
-          }),
-        ],
+        embeds: [queueEmbed],
       });
     } catch (err) {
       console.error('[PeaceX] [Play Command Error]:', err);
