@@ -6,7 +6,8 @@
  * - YouTube, Spotify, SoundCloud & Direct Audio Stream playback
  * - Real-time Button Control Panel (Pause, Resume, Skip, Stop, Loop, Shuffle, Volume)
  * - Safe error handling (Zero backdoors, zero token leaks, zero unauthorized eval)
- * - Respects 24/7 mode (data/settings.json -> vc247)
+ * - DisTube v5 compatible (DisTubeOptions clean of legacy keys)
+ * - Custom voiceStateUpdate auto-leave handler (respects 24/7 mode)
  */
 const { DisTube } = require('distube');
 const { SpotifyPlugin } = require('@distube/spotify');
@@ -30,6 +31,7 @@ if (ffmpeg) {
 }
 
 let distubeInstance = null;
+const emptyTimers = new Map();
 
 function getDisTube() {
   return distubeInstance;
@@ -126,9 +128,6 @@ function initMusic(client) {
     emitNewSongOnly: true,
     emitAddSongWhenCreatingQueue: false,
     emitAddListWhenCreatingQueue: false,
-    leaveOnEmpty: true,
-    leaveOnFinish: false,
-    leaveOnStop: false,
     plugins: [
       new SpotifyPlugin(),
       new SoundCloudPlugin(),
@@ -173,16 +172,6 @@ function initMusic(client) {
     } catch {}
   });
 
-  distubeInstance.on('empty', (queue) => {
-    // Check 24/7 status before leaving
-    const { channelId } = getSetting(queue.id, 'vc247') || {};
-    if (channelId) return; // Keep connection if 24/7 is enabled
-
-    queue.textChannel?.send({
-      embeds: [warningEmbed({ title: 'Voice Channel Empty', description: 'Voice channel is empty. Disconnecting.' })],
-    }).catch(() => {});
-  });
-
   distubeInstance.on('finish', (queue) => {
     const { channelId } = getSetting(queue.id, 'vc247') || {};
     if (!channelId) {
@@ -198,6 +187,45 @@ function initMusic(client) {
       channel.send({
         embeds: [errorEmbed({ title: 'Music Playback Error', description: `An error occurred: \`${error.message.slice(0, 150)}\`` })],
       }).catch(() => {});
+    }
+  });
+
+  // Native voiceStateUpdate auto-disconnect when VC is empty of human members (respects 24/7)
+  client.on('voiceStateUpdate', (oldState, newState) => {
+    const guild = oldState.guild || newState.guild;
+    const me = guild?.members?.me;
+    if (!me?.voice?.channelId) return;
+
+    const botChannel = me.voice.channel;
+    if (!botChannel) return;
+
+    const humanCount = botChannel.members.filter((m) => !m.user.bot).size;
+    const { channelId: is247 } = getSetting(guild.id, 'vc247') || {};
+
+    if (humanCount === 0 && !is247) {
+      if (!emptyTimers.has(guild.id)) {
+        const timer = setTimeout(() => {
+          emptyTimers.delete(guild.id);
+          const currentBotChannel = guild.members?.me?.voice?.channel;
+          if (!currentBotChannel) return;
+          const currentHumans = currentBotChannel.members.filter((m) => !m.user.bot).size;
+          const { channelId: current247 } = getSetting(guild.id, 'vc247') || {};
+          if (currentHumans === 0 && !current247) {
+            const queue = distubeInstance?.getQueue(guild.id);
+            if (queue) queue.stop();
+            guild.members.me?.voice?.disconnect().catch(() => {});
+            queue?.textChannel?.send({
+              embeds: [warningEmbed({ title: 'Voice Channel Empty', description: 'Left the voice channel because everyone left.' })],
+            }).catch(() => {});
+          }
+        }, 60000); // 1 minute delay before leaving
+        emptyTimers.set(guild.id, timer);
+      }
+    } else {
+      if (emptyTimers.has(guild.id)) {
+        clearTimeout(emptyTimers.get(guild.id));
+        emptyTimers.delete(guild.id);
+      }
     }
   });
 
