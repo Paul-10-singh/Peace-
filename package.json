@@ -10,6 +10,7 @@
     "deploy:guild": "node scripts/deploy.js --guild-scope",
     "deploy:guilds": "node scripts/deploy.js --guild-scope",
     "deploy:global": "node scripts/deploy.js --global",
+    "sync:reactions": "node scripts/syncReactions.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
