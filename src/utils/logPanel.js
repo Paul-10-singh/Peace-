@@ -40,7 +40,7 @@ const LOG_CATEGORIES = {
     name: 'Message Events',
     emoji: '💬',
     defaultChannelName: '#🔒〢ᴍᴇꜱꜱᴀɢᴇ_ʟᴏɢꜱ',
-    searchKeywords: ['message_logs', 'messagelogs', 'message'],
+    searchKeywords: ['message_logs', 'messagelogs', 'msg_logs'],
     events: [
       'Message Deleted',
       'Message Edited',
@@ -54,7 +54,7 @@ const LOG_CATEGORIES = {
     name: 'Member Events (Entry)',
     emoji: '📥',
     defaultChannelName: '#🔒〢ᴇɴᴛʀʏ_ʟᴏɢꜱ',
-    searchKeywords: ['entry_logs', 'entrylogs', 'entry', 'join'],
+    searchKeywords: ['entry_logs', 'entrylogs', 'join_logs', 'joinlogs'],
     events: ['Member Joined', 'Invite Tracker Log'],
   },
   exit: {
@@ -62,7 +62,7 @@ const LOG_CATEGORIES = {
     name: 'Member Events (Exit)',
     emoji: '📤',
     defaultChannelName: '#🔒〢ᴇxɪᴛ_ʟᴏɢꜱ',
-    searchKeywords: ['exit_logs', 'exitlogs', 'exit', 'leave'],
+    searchKeywords: ['exit_logs', 'exitlogs', 'leave_logs', 'leavelogs'],
     events: ['Member Left'],
   },
   role: {
@@ -70,7 +70,7 @@ const LOG_CATEGORIES = {
     name: 'Role Events',
     emoji: '🏷️',
     defaultChannelName: '#🔒〢ʀᴏʟᴇ_ʟᴏɢꜱ',
-    searchKeywords: ['role_logs', 'rolelogs', 'role'],
+    searchKeywords: ['role_logs', 'rolelogs'],
     events: [
       'Role Given',
       'Role Removed',
@@ -85,7 +85,7 @@ const LOG_CATEGORIES = {
     name: 'Nickname Events',
     emoji: '📛',
     defaultChannelName: '#🔒〢ɴɪᴄᴋɴᴀᴍᴇ_ʟᴏɢꜱ',
-    searchKeywords: ['nickname_logs', 'nicknamelogs', 'nickname', 'nick'],
+    searchKeywords: ['nickname_logs', 'nicknamelogs', 'nick_logs'],
     events: ['Nicknamed Changed'],
   },
   ban: {
@@ -93,7 +93,7 @@ const LOG_CATEGORIES = {
     name: 'Ban & Moderation Events',
     emoji: '🔨',
     defaultChannelName: '#🔒〢ʙᴀɴ_ᴜɴʙᴀɴ',
-    searchKeywords: ['ban_unban', 'banunban', 'ban', 'mod_logs'],
+    searchKeywords: ['ban_unban', 'banunban', 'ban_logs', 'banlogs'],
     events: [
       'Member Banned',
       'Member Unbanned',
@@ -107,7 +107,7 @@ const LOG_CATEGORIES = {
     name: 'Server Events',
     emoji: '🏛️',
     defaultChannelName: '#🔒〢ꜱᴇʀᴠᴇʀ_ʟᴏɢꜱ',
-    searchKeywords: ['server_logs', 'serverlogs', 'server'],
+    searchKeywords: ['server_logs', 'serverlogs'],
     events: [
       'Server Updated',
       'App Added',
@@ -122,7 +122,7 @@ const LOG_CATEGORIES = {
     name: 'Channel Events',
     emoji: '📁',
     defaultChannelName: 'Select Channel',
-    searchKeywords: ['channel_logs', 'channellogs', 'channel'],
+    searchKeywords: ['channel_logs', 'channellogs'],
     events: [
       'Channel Created',
       'Channel Deleted',
@@ -137,7 +137,7 @@ const LOG_CATEGORIES = {
     name: 'Emoji & Stickers Events',
     emoji: '✨',
     defaultChannelName: 'Select Channel',
-    searchKeywords: ['emoji_logs', 'emojilogs', 'emoji', 'sticker'],
+    searchKeywords: ['emoji_logs', 'emojilogs', 'sticker_logs'],
     events: [
       'Emoji Created',
       'Emoji Deleted',
@@ -152,7 +152,7 @@ const LOG_CATEGORIES = {
     name: 'Voice Events',
     emoji: '🎙️',
     defaultChannelName: '#🔒〢ᴠᴄ_ʟᴏɢꜱ',
-    searchKeywords: ['vc_logs', 'vclogs', 'vc', 'voice'],
+    searchKeywords: ['vc_logs', 'vclogs', 'voice_logs', 'voicelogs'],
     events: [
       'Voice Channel Joined',
       'Voice Channel Left',
@@ -167,7 +167,7 @@ const LOG_CATEGORIES = {
     name: 'Thread Events',
     emoji: '🧵',
     defaultChannelName: 'Select Channel',
-    searchKeywords: ['thread_logs', 'threadlogs', 'thread'],
+    searchKeywords: ['thread_logs', 'threadlogs'],
     events: ['Thread Created', 'Thread Deleted', 'Thread Updated'],
   },
   webhook: {
@@ -175,7 +175,7 @@ const LOG_CATEGORIES = {
     name: 'Webhook Events',
     emoji: '🪝',
     defaultChannelName: '#🔒〢ᴡᴇʙʜᴏᴏᴋ_ʟᴏɢꜱ',
-    searchKeywords: ['webhook_logs', 'webhooklogs', 'webhook'],
+    searchKeywords: ['webhook_logs', 'webhooklogs'],
     events: ['Webhook Created', 'Webhook Updated', 'Webhook Deleted'],
   },
   integration: {
@@ -183,7 +183,7 @@ const LOG_CATEGORIES = {
     name: 'Integration Events',
     emoji: '🔌',
     defaultChannelName: 'Select Channel',
-    searchKeywords: ['integration_logs', 'integrationlogs', 'integration'],
+    searchKeywords: ['integration_logs', 'integrationlogs'],
     events: ['Integration Created', 'Integration Updated', 'Integration Deleted'],
   },
   invite: {
@@ -191,7 +191,7 @@ const LOG_CATEGORIES = {
     name: 'Invite Events',
     emoji: '🔗',
     defaultChannelName: 'Select Channel',
-    searchKeywords: ['invite_logs', 'invitelogs', 'invite'],
+    searchKeywords: ['invite_logs', 'invitelogs'],
     events: ['Invite Created', 'Invite Updated', 'Invite Deleted'],
   },
   stage: {
@@ -199,7 +199,7 @@ const LOG_CATEGORIES = {
     name: 'Stage Events',
     emoji: '🎭',
     defaultChannelName: 'Select Channel',
-    searchKeywords: ['stage_logs', 'stagelogs', 'stage'],
+    searchKeywords: ['stage_logs', 'stagelogs'],
     events: ['Stage Created', 'Stage Updated', 'Stage Deleted'],
   },
   automod: {
@@ -207,7 +207,7 @@ const LOG_CATEGORIES = {
     name: 'AutoMod Events',
     emoji: '🛡️',
     defaultChannelName: '#🔒〢ᴍᴏᴅ_ʟᴏɢꜱ',
-    searchKeywords: ['mod_logs', 'modlogs', 'automod', 'automod_logs'],
+    searchKeywords: ['mod_logs', 'modlogs', 'automod_logs', 'automodlogs'],
     events: [
       'AutoMod Rule Created',
       'AutoMod Rule Deleted',
@@ -272,7 +272,7 @@ function buildPanelPayload(guild, activeCategoryKey = 'message', showOverview = 
       .addOptions(categoryOptions)
   );
 
-  // Row 2: Channel picker for active category
+  // Row 2: Channel picker for active category (only Text channels)
   const channelPickerRow = new ActionRowBuilder().addComponents(
     new ChannelSelectMenuBuilder()
       .setCustomId(`log_panel:set_channel:${currentCategory.key}`)
@@ -304,18 +304,21 @@ function buildPanelPayload(guild, activeCategoryKey = 'message', showOverview = 
 }
 
 /**
- * Automatically scans server channels and matches them to log categories.
+ * Automatically scans server text channels and matches them to log categories.
+ * Strictly ignores Voice and Stage channels.
  */
 function autoDetectChannels(guild) {
   const config = get(guild.id, 'logs') || {};
-  const channels = [...(guild.channels?.cache?.values() || [])].filter((c) => c.isTextBased?.() || c.type === 0);
+  const channels = [...(guild.channels?.cache?.values() || [])].filter(
+    (c) => (c.type === 0 || c.type === 5) && !c.isVoiceBased?.()
+  );
   const matched = [];
 
   for (const [key, cat] of Object.entries(LOG_CATEGORIES)) {
     // If already configured and still valid, keep it
     if (config[key] && guild.channels?.cache?.has(config[key])) continue;
 
-    // Search for matching channel by normalized name
+    // Search for matching text channel by normalized name
     const found = channels.find((c) => {
       const norm = normalizeName(c.name);
       return cat.searchKeywords.some((kw) => norm.includes(kw));

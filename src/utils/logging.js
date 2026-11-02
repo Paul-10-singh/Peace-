@@ -5,6 +5,18 @@
 const { get } = require('./settings');
 const { LOG_CATEGORIES, normalizeName } = require('./logPanel');
 
+/**
+ * Checks whether a channel is a dedicated text log channel.
+ * Strictly excludes Voice and Stage channels.
+ */
+function isTextLogChannel(c) {
+  if (!c) return false;
+  // Never log to a Voice Channel (type 2) or Stage Channel (type 13)
+  if (c.type === 2 || c.type === 13) return false;
+  if (typeof c.isVoiceBased === 'function' && c.isVoiceBased()) return false;
+  return typeof c.isTextBased === 'function' && c.isTextBased();
+}
+
 async function getLogChannel(client, guildId, category) {
   const guild = client.guilds.cache.get(guildId) || (await client.guilds.fetch(guildId).catch(() => null));
   if (!guild) return null;
@@ -21,10 +33,10 @@ async function getLogChannel(client, guildId, category) {
     else if (category === 'invite') channelId = config.invite || config.entry;
   }
 
-  // Auto-detect fallback from channel names if unconfigured
+  // Auto-detect fallback from text channel names if unconfigured
   if (!channelId && LOG_CATEGORIES[category]) {
     const cat = LOG_CATEGORIES[category];
-    const channels = [...(guild.channels?.cache?.values() || [])].filter((c) => c.isTextBased?.() || c.type === 0);
+    const channels = [...(guild.channels?.cache?.values() || [])].filter(isTextLogChannel);
     const found = channels.find((c) => {
       const norm = normalizeName(c.name);
       return cat.searchKeywords.some((kw) => norm.includes(kw));
@@ -36,7 +48,8 @@ async function getLogChannel(client, guildId, category) {
 
   let channel = guild.channels.cache.get(channelId);
   if (!channel) channel = await guild.channels.fetch(channelId).catch(() => null);
-  if (!channel || !channel.isTextBased()) return null;
+  // Ensure the resolved channel is strictly a text channel, never a voice chat!
+  if (!channel || !isTextLogChannel(channel)) return null;
 
   return channel;
 }
@@ -53,4 +66,4 @@ async function sendLog(client, guildId, category, payload) {
   }
 }
 
-module.exports = { getLogChannel, sendLog };
+module.exports = { getLogChannel, sendLog, isTextLogChannel };

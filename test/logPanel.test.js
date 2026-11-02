@@ -107,4 +107,20 @@ describe('Log Panel System', () => {
     expect(result.config.entry).toBe('ch2');
     expect(result.config.vc).toBe('ch3');
   });
+
+  it('strictly ignores voice channels when detecting log channels', () => {
+    const mockGuild = {
+      id: 'mock_vc_guild',
+      channels: {
+        cache: new Map([
+          ['vc1', { id: 'vc1', name: 'General Vc', type: 2, isTextBased: () => true, isVoiceBased: () => true }],
+          ['vc2', { id: 'vc2', name: '🔒〢ᴠᴄ_ʟᴏɢꜱ', type: 0, isTextBased: () => true, isVoiceBased: () => false }],
+        ]),
+      },
+    };
+
+    const result = autoDetectChannels(mockGuild);
+    expect(result.config.vc).toBe('vc2');
+    expect(result.config.vc).not.toBe('vc1');
+  });
 });

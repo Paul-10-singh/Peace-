@@ -272,33 +272,78 @@ function buildRoleUpdateLog({ member, added = [], removed = [], executor = null 
 
 function buildVoiceLog({ member, action, channel, oldChannel = null, details = null }) {
   const user = member?.user || member;
-  const nowUnix = Math.floor(Date.now() / 1000);
+  const avatarUrl =
+    typeof user?.displayAvatarURL === 'function'
+      ? user.displayAvatarURL({ dynamic: true, size: 256 })
+      : null;
 
-  const fields = [
-    { label: 'Member', value: `<@${user.id}> (\`${user.username}\`)` },
-    { label: 'User ID', value: `\`${user.id}\`` },
-    { label: 'Action', value: `\`${action}\`` },
-  ];
+  let emoji = '🎙️';
+  let color = 0x5865F2;
+  let actionText = '';
 
-  if (oldChannel && channel && oldChannel.id !== channel.id) {
-    fields.push({ label: 'From Channel', value: `<#${oldChannel.id}> (\`#${oldChannel.name}\`)` });
-    fields.push({ label: 'To Channel', value: `<#${channel.id}> (\`#${channel.name}\`)` });
-  } else if (channel) {
-    fields.push({ label: 'Channel', value: `<#${channel.id}> (\`#${channel.name}\`)` });
+  const userMention = `<@${user.id}>`;
+  const channelMention = channel ? `<#${channel.id}>` : '`Unknown VC`';
+
+  if (action === 'Joined Voice Channel') {
+    emoji = '📥';
+    color = 0x57F287; // Green
+    actionText = `${emoji} ${userMention} joined voice channel ${channelMention}.`;
+  } else if (action === 'Left Voice Channel') {
+    emoji = '📤';
+    color = 0xED4245; // Red
+    actionText = `${emoji} ${userMention} left voice channel ${channelMention}.`;
+  } else if (action === 'Switched Voice Channel') {
+    emoji = '🔀';
+    color = 0x5865F2; // Blurple
+    const oldMention = oldChannel ? `<#${oldChannel.id}>` : '`Unknown VC`';
+    actionText = `${emoji} ${userMention} switched from ${oldMention} to ${channelMention}.`;
+  } else if (action === 'Server Muted') {
+    emoji = '🔇';
+    color = 0xFEE75C;
+    actionText = `${emoji} ${userMention} was server muted in ${channelMention}.`;
+  } else if (action === 'Server Unmuted') {
+    emoji = '🔊';
+    color = 0x57F287;
+    actionText = `${emoji} ${userMention} was server unmuted in ${channelMention}.`;
+  } else if (action === 'Server Deafened') {
+    emoji = '🛑';
+    color = 0xED4245;
+    actionText = `${emoji} ${userMention} was server deafened in ${channelMention}.`;
+  } else if (action === 'Server Undeafened') {
+    emoji = '🎧';
+    color = 0x57F287;
+    actionText = `${emoji} ${userMention} was server undeafened in ${channelMention}.`;
+  } else {
+    actionText = `${emoji} ${userMention}: \`${action}\` in ${channelMention}.`;
   }
 
-  if (details) {
-    fields.push({ label: 'Details', value: `\`${details}\`` });
+  let idsBlock = `**IDs**\n> 👤 ${userMention} ( \`${user.id}\` )`;
+  if (channel) {
+    idsBlock += `\n> 🔊 ${channelMention} ( \`${channel.id}\` )`;
+  }
+  if (oldChannel && oldChannel.id !== channel?.id) {
+    idsBlock += `\n> 🔊 <#${oldChannel.id}> ( \`${oldChannel.id}\` )`;
   }
 
-  fields.push({ label: 'Time', value: `<t:${nowUnix}:F> (<t:${nowUnix}:R>)` });
+  const description = `${actionText}\n\n${idsBlock}`;
 
-  return createLogCard({
-    title: '🎙️ Voice Event',
-    user,
-    fields,
-    color: 0x5865F2,
-  });
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setDescription(description)
+    .setFooter({ text: `User ID: ${user.id}` })
+    .setTimestamp();
+
+  if (user?.username) {
+    embed.setAuthor({
+      name: `${user.tag || user.username}`,
+      iconURL: avatarUrl || undefined,
+    });
+    if (avatarUrl) {
+      embed.setThumbnail(avatarUrl);
+    }
+  }
+
+  return embed;
 }
 
 module.exports = {

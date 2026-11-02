@@ -124,4 +124,19 @@ describe('Log Formatter System', () => {
     expect(data.description).toContain('`NewKing`');
     expect(data.description).toContain(`> ❯ **User ID :** \`${mockUser.id}\``);
   });
+
+  it('buildVoiceLog formats exact Image 2 style with IDs block and mentions', () => {
+    const embed = buildVoiceLog({
+      member: mockUser,
+      action: 'Joined Voice Channel',
+      channel: mockChannel,
+    });
+
+    const data = embed.data;
+    expect(data.color).toBe(0x57F287);
+    expect(data.description).toContain(`📥 <@${mockUser.id}> joined voice channel <#${mockChannel.id}>.`);
+    expect(data.description).toContain('**IDs**');
+    expect(data.description).toContain(`> 👤 <@${mockUser.id}> ( \`${mockUser.id}\` )`);
+    expect(data.description).toContain(`> 🔊 <#${mockChannel.id}> ( \`${mockChannel.id}\` )`);
+  });
 });
