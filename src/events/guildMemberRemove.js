@@ -13,27 +13,30 @@ module.exports = {
     const guild = member.guild;
     const config = get(guild.id, 'farewell');
 
-    if (config.enabled) {
-      const channel = guild.channels.cache.get(config.channelId);
-      if (channel?.isTextBased()) {
-        const embed = errorEmbed({
-          title: `Goodbye from ${guild.name}!`,
-          description: (config.message || 'Goodbye {user}, we will miss you!').replace('{user}', `**${member.user.username}**`),
-          thumbnail: member.user.displayAvatarURL({ dynamic: true, size: 256 }),
-          extra: `Member #${guild.memberCount - 1}`,
+    const welcomeUtil = require('../utils/welcome');
+    if (config.enabled !== false) {
+      const exitChannel = welcomeUtil.resolveExitChannel(guild, config);
+      if (exitChannel?.isTextBased()) {
+        const payload = welcomeUtil.buildExitPayload({
+          guild,
+          user: member.user,
+          memberCount: guild.memberCount,
         });
 
-        channel.send({ embeds: [embed] }).catch(() => {});
+        exitChannel.send(payload).catch((err) => {
+          console.error(`[PeaceX] [Exit] Could not send exit message:`, err.message);
+        });
       }
     }
 
-    const leftEmbed = errorEmbed({
-      title: 'Member Left',
-      description: `${member.user.username} (<@${member.id}>) left the server.`,
-      extra: `Member #${guild.memberCount - 1}`,
+    const { buildMemberLeaveLog } = require('../utils/logFormatter');
+    const roles = member.roles?.cache ? [...member.roles.cache.values()].filter((r) => r.id !== guild.id) : [];
+    const leftEmbed = buildMemberLeaveLog({
+      member,
+      roles,
     });
 
-    await sendLog(client, guild.id, 'goodbye', { embeds: [leftEmbed] });
+    await sendLog(client, guild.id, 'exit', { embeds: [leftEmbed] });
     await updateStats(client, guild);
   },
 };

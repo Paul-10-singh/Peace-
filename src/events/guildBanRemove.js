@@ -2,8 +2,8 @@
  * Peace✘ - Discord Bot
  * Developed by Smith.Code
  */
-const { successEmbed } = require('../utils/decorations');
 const { sendLog } = require('../utils/logging');
+const { buildBanLog } = require('../utils/logFormatter');
 
 module.exports = {
   name: 'guildBanRemove',
@@ -11,12 +11,21 @@ module.exports = {
     const { guild, user } = ban;
     if (!guild) return;
 
-    const embed = successEmbed({
-      title: 'Member Unbanned',
-      description: `${user.tag} (<@${user.id}>) was unbanned.`,
-      extra: `User ID: ${user.id}`,
+    let executor = null;
+    try {
+      const logs = await guild.fetchAuditLogs({ limit: 1, type: 23 }).catch(() => null);
+      const entry = logs?.entries?.first();
+      if (entry && entry.target?.id === user.id) {
+        executor = entry.executor;
+      }
+    } catch {}
+
+    const embed = buildBanLog({
+      user,
+      executor,
+      isUnban: true,
     });
 
-    await sendLog(client, guild.id, 'moderation', { embeds: [embed] });
+    await sendLog(client, guild.id, 'ban', { embeds: [embed] });
   },
 };

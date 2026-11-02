@@ -2,8 +2,8 @@
  * Peace✘ - Discord Bot
  * Developed by Smith.Code
  */
-const { warningEmbed } = require('../utils/decorations');
 const { sendLog } = require('../utils/logging');
+const { buildNicknameLog, buildRoleUpdateLog } = require('../utils/logFormatter');
 
 module.exports = {
   name: 'guildMemberUpdate',
@@ -13,12 +13,10 @@ module.exports = {
 
     // Nickname changes
     if (oldMember && oldMember.nickname !== newMember.nickname) {
-      const embed = warningEmbed({
-        title: 'Nickname Changed',
-        description:
-          `**${newMember.user.username}** (<@${newMember.id}>) nickname changed:\n` +
-          `**Before:** ${oldMember.nickname || '(none)'}\n` +
-          `**After:** ${newMember.nickname || '(none)'}`,
+      const embed = buildNicknameLog({
+        member: newMember,
+        oldNick: oldMember.nickname,
+        newNick: newMember.nickname,
       });
 
       await sendLog(client, guild.id, 'nickname', { embeds: [embed] });
@@ -32,13 +30,10 @@ module.exports = {
     const removed = [...oldRoles].filter((id) => !newRoles.has(id) && id !== guild.id);
     if (!added.length && !removed.length) return;
 
-    const parts = [];
-    if (added.length) parts.push(`**Added:** ${added.map((id) => `<@&${id}>`).join(', ')}`);
-    if (removed.length) parts.push(`**Removed:** ${removed.map((id) => `<@&${id}>`).join(', ')}`);
-
-    const embed = warningEmbed({
-      title: 'Roles Updated',
-      description: `**${newMember.user.username}** (<@${newMember.id}>) roles changed:\n${parts.join('\n')}`,
+    const embed = buildRoleUpdateLog({
+      member: newMember,
+      added,
+      removed,
     });
 
     await sendLog(client, guild.id, 'role', { embeds: [embed] });

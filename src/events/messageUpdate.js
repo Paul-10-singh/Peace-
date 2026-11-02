@@ -2,8 +2,8 @@
  * Peace✘ - Discord Bot
  * Developed by Smith.Code
  */
-const { warningEmbed } = require('../utils/decorations');
 const { sendLog } = require('../utils/logging');
+const { buildMessageEditLog } = require('../utils/logFormatter');
 
 module.exports = {
   name: 'messageUpdate',
@@ -17,14 +17,11 @@ module.exports = {
 
     if (oldMessage?.content === newMessage.content) return;
 
-    const embed = warningEmbed({
-      title: 'Message Edited',
-      description: `[Jump to message](https://discord.com/channels/${newMessage.guild.id}/${newMessage.channel.id}/${newMessage.id})`,
-      fields: [
-        { name: 'Before', value: (oldMessage?.content || '[embed/attachment only]').slice(0, 1024) || '*(empty)*' },
-        { name: 'After', value: (newMessage.content || '[embed/attachment only]').slice(0, 1024) || '*(empty)*' },
-      ],
-      extra: `${newMessage.author.tag} | ${newMessage.id}`,
+    const embed = buildMessageEditLog({
+      oldMessage,
+      newMessage,
+      author: newMessage.author,
+      channel: newMessage.channel,
     });
 
     await sendLog(client, newMessage.guild.id, 'message', { embeds: [embed] });

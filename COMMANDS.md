@@ -37,7 +37,7 @@ All commands are slash (`/`) commands.
 `24/7 voice`    : /247 on/end/status [channel] /vc247 set/off/status — bot stays in a VC around the clock & auto-rejoins on kick/move/disconnect
 `Tickets`       : /ticket setup/setlog/panel/close
 `Roles/emoji`   : /giverole /roleicon /stealemoji /rolemanage info/all/strip/inrole
-`Server config` : /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /stats setup/disable/status /vcrole /setlog /embed /announce /backup /leaveserver /serverlist
+`Server config` : /log setup/view/set/autolink /welcome setup/test/enable/disable/info /exit setup/test/enable/disable/info /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /stats setup/disable/status /vcrole /setlog /embed /announce /backup /leaveserver /serverlist
 `Extras`        : /snipe /purgebots /picture user/server/icon
 `Security`      : /safety on/off/status /security on/off/action/threshold /whitelist add/remove /antilink * /antinuke on/off /scamdetect on/off /lockdown /ignore add/remove
 

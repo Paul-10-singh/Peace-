@@ -98,20 +98,28 @@ module.exports = {
       await member.send({ embeds: [dmEmbed] }).catch(() => {});
     }
 
-    if (config.enabled) {
-      const channel = guild.channels.cache.get(config.channelId);
-      if (channel?.isTextBased()) {
-        const embed = successEmbed({
-          title: `Welcome to ${guild.name}!`,
-          description: (config.message || 'Welcome {user} to {server}!')
-            .replace('{user}', `<@${member.id}>`)
-            .replace('{server}', guild.name),
-          thumbnail: member.user.displayAvatarURL({ dynamic: true, size: 256 }),
-          extra: `Member #${guild.memberCount}`,
+    const welcomeUtil = require('../utils/welcome');
+    if (config.enabled !== false) {
+      const welcomeChannel = welcomeUtil.resolveWelcomeChannel(guild, config);
+      if (welcomeChannel) {
+        let inviter = null;
+        if (usedInvite) {
+          inviter = usedInvite.inviter || (usedInvite.code ? `code \`${usedInvite.code}\`` : null);
+        } else if (guild.vanityURLCode) {
+          inviter = 'Vanity URL';
+        }
+
+        const payload = welcomeUtil.buildWelcomePayload({
+          guild,
+          member,
+          inviter,
+          config,
         });
 
-        channel.send({ embeds: [embed] }).catch(() => {});
-        await sendLog(client, guild.id, 'welcome', { embeds: [embed] });
+        welcomeChannel.send(payload).catch((err) => {
+          console.error(`[PeaceX] [Welcome] Could not send welcome message:`, err.message);
+        });
+        await sendLog(client, guild.id, 'welcome', payload).catch(() => {});
       }
 
       // Welcome role — correctly inside the config.enabled block
@@ -119,7 +127,7 @@ module.exports = {
         const role = guild.roles.cache.get(config.roleId);
         if (role) {
           try {
-            await member.roles.add(role);
+            await member.roles.add(role, 'Welcome role');
           } catch (err) {
             console.error(`[PeaceX] [Welcome] Could not assign role ${role.name}:`, err.message);
           }
@@ -154,17 +162,23 @@ module.exports = {
       }
     }
 
-    const inviteEmbed = successEmbed({
-      title: 'Member Joined',
-      description: `${member.user.username} (<@${member.id}>) joined the server.`,
-      fields: [
-        { name: 'Member', value: `<@${member.id}>`, inline: true },
-        { name: 'Invited by', value: usedInvite ? `${usedInvite.inviter?.username || 'Unknown'} (code ${usedInvite.code})` : 'Unknown', inline: true },
-      ],
-      extra: `Member #${guild.memberCount}`,
+    const { getLogChannel } = require('../utils/logging');
+    const { buildMemberJoinLog } = require('../utils/logFormatter');
+    const entryEmbed = buildMemberJoinLog({
+      member,
+      usedInvite,
+      vanityCode: guild.vanityURLCode,
     });
 
-    await sendLog(client, guild.id, 'invite', { embeds: [inviteEmbed] });
+    const entryCh = await getLogChannel(client, guild.id, 'entry');
+    const inviteCh = await getLogChannel(client, guild.id, 'invite');
+
+    if (entryCh) {
+      await entryCh.send({ embeds: [entryEmbed] }).catch(() => {});
+    }
+    if (inviteCh && inviteCh.id !== entryCh?.id) {
+      await inviteCh.send({ embeds: [entryEmbed] }).catch(() => {});
+    }
     await updateStats(client, guild);
   },
 };

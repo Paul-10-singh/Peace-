@@ -256,6 +256,11 @@ module.exports = {
         });
         return;
       }
+      if (interaction.customId.startsWith('log_panel:')) {
+        const { handleLogPanelInteraction } = require('../utils/logPanel');
+        await handleLogPanelInteraction(interaction);
+        return;
+      }
       if (interaction.customId === 'ticket_close') {
         const { closeTicketFlow } = require('../commands/moderation/ticketpanel.js');
         await closeTicketFlow(interaction, client);
@@ -288,6 +293,11 @@ module.exports = {
     }
 
     if (interaction.isStringSelectMenu()) {
+      if (interaction.customId.startsWith('log_panel:')) {
+        const { handleLogPanelInteraction } = require('../utils/logPanel');
+        await handleLogPanelInteraction(interaction);
+        return;
+      }
       if (interaction.customId.startsWith('music_')) {
         const { handleMusicButton } = require('../music/player');
         await handleMusicButton(interaction, client);
@@ -328,8 +338,11 @@ module.exports = {
     }
 
     if (interaction.isChannelSelectMenu()) {
-      // Acknowledge stale or unsupported channel selects instead of leaving
-      // them spinning until Discord reports an interaction timeout.
+      if (interaction.customId.startsWith('log_panel:')) {
+        const { handleLogPanelInteraction } = require('../utils/logPanel');
+        await handleLogPanelInteraction(interaction);
+        return;
+      }
       await interaction.deferUpdate().catch(() => {});
       return;
     }

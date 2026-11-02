@@ -13,9 +13,54 @@ const { saveRoom, removeRoom, panelPayload } = require('../utils/tempvcPanel');
 
 const cleaning = new Set();
 
+async function logVoiceEvent(client, oldState, newState) {
+  const guild = newState.guild || oldState.guild;
+  if (!guild) return;
+  const member = newState.member || oldState.member;
+  if (!member || member.user?.bot) return;
+
+  const { sendLog } = require('../utils/logging');
+  const { buildVoiceLog } = require('../utils/logFormatter');
+
+  let action = null;
+  let channel = newState.channel || oldState.channel;
+  let oldChannel = oldState.channel;
+
+  if (!oldState.channelId && newState.channelId) {
+    action = 'Joined Voice Channel';
+    channel = newState.channel;
+  } else if (oldState.channelId && !newState.channelId) {
+    action = 'Left Voice Channel';
+    channel = oldState.channel;
+  } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+    action = 'Switched Voice Channel';
+    channel = newState.channel;
+    oldChannel = oldState.channel;
+  } else if (oldState.serverMute !== newState.serverMute) {
+    action = newState.serverMute ? 'Server Muted' : 'Server Unmuted';
+    channel = newState.channel;
+  } else if (oldState.serverDeaf !== newState.serverDeaf) {
+    action = newState.serverDeaf ? 'Server Deafened' : 'Server Undeafened';
+    channel = newState.channel;
+  }
+
+  if (action) {
+    const embed = buildVoiceLog({
+      member,
+      action,
+      channel,
+      oldChannel,
+    });
+
+    await sendLog(client, guild.id, 'vc', { embeds: [embed] }).catch(() => {});
+  }
+}
+
 async function handleVoiceState(client, oldState, newState) {
   const guild = newState.guild || oldState.guild;
   if (!guild) return;
+
+  await logVoiceEvent(client, oldState, newState).catch(() => {});
 
   const { channelId } = get(guild.id, 'tempvc');
   if (!channelId) return;
