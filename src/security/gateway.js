@@ -141,6 +141,10 @@ async function onMessage(client, message) {
     return blockMessage(client, message, cfg, legacy.reason);
   }
 
+  // 2.5) blocked scam images (SHA-256 exact + 64-bit dHash perceptual match)
+  const blockedImg = await checkBlockedImageHit(client, message, cfg, sec);
+  if (blockedImg) return blockedImg;
+
   // 3) Layer 3 content analysis — fast path first
   const knownBad = !!sec.intel.feeds.knownBad && sec.intel.feeds.knownBad(text);
   let analysis;
@@ -170,6 +174,32 @@ async function onMessage(client, message) {
     }
   }
   return { action: 'safe' };
+}
+
+async function checkBlockedImageHit(client, message, cfg, sec) {
+  if (cfg.antiLink?.blockScam === false || !sec.intel?.imageGuard?.checkMessageImages) return null;
+  const imgMatch = await sec.intel.imageGuard.checkMessageImages(message).catch(() => null);
+  if (!imgMatch?.hit) return null;
+  const tag = imgMatch.entry?.label ? ` (${imgMatch.entry.label})` : '';
+  const via = imgMatch.method === 'sha256'
+    ? 'exact match'
+    : `${imgMatch.similarity}% visual match`;
+  if (sec.intel.reputation?.recordSender) {
+    sec.intel.reputation.recordSender(imgMatch.entry?.sha256 || imgMatch.url, 'scam-image', message.guild.id);
+  }
+  return blockMessage(client, message, cfg, `posted a blocked scam image${tag} [${via}]`);
+}
+
+async function onMessageImages(client, message) {
+  if (!message?.guild || message.author?.bot) return { action: 'safe' };
+  const cfg = get(message.guild.id, 'security');
+  if (!cfg.enabled || !enabled(client, message.guild.id)) return { action: 'safe' };
+  if ((cfg.ignoredChannels || []).includes(message.channel?.id)) return { action: 'safe' };
+  if ((cfg.whitelist || []).includes(message.author?.id)) return { action: 'safe' };
+  if (message.member?.permissions?.has?.('ManageMessages')) return { action: 'safe' };
+
+  const sec = await security(client);
+  return (await checkBlockedImageHit(client, message, cfg, sec)) || { action: 'safe' };
 }
 
 async function blockMessage(client, message, cfg, reason) {
@@ -226,4 +256,4 @@ async function onMemberJoin(client, member, ctx = {}) {
 
 function disable() { /* nothing to unwind */ }
 
-module.exports = { onAuditEvent, onRoleGrant, onBotAdd, onMessage, onMemberJoin, enabled, disable };
+module.exports = { onAuditEvent, onRoleGrant, onBotAdd, onMessage, onMessageImages, onMemberJoin, enabled, disable };

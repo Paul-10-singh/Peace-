@@ -4,6 +4,7 @@
  */
 const { sendLog } = require('../utils/logging');
 const { buildMessageEditLog } = require('../utils/logFormatter');
+const { onMessageImages } = require('../security/gateway');
 
 module.exports = {
   name: 'messageUpdate',
@@ -15,7 +16,15 @@ module.exports = {
       if (!fetched) return;
     }
 
-    if (oldMessage?.content === newMessage.content) return;
+    const contentChanged = oldMessage?.content !== newMessage.content;
+    const embedsAdded = (newMessage.embeds?.length || 0) > (oldMessage?.embeds?.length || 0);
+    if (!contentChanged && !embedsAdded) return;
+
+    // Catch edited messages or delayed Discord embed unfurls containing blocked scam images
+    const imgCheck = await onMessageImages(client, newMessage).catch(() => ({ action: 'safe' }));
+    if (imgCheck.action === 'blocked') return;
+
+    if (!contentChanged) return;
 
     const embed = buildMessageEditLog({
       oldMessage,

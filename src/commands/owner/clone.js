@@ -2,24 +2,34 @@
  * Peace✘ - Discord Bot
  * Developed by Smith.Code
  *
- * /clone all - copy every emoji (incl. animated GIFs) and sticker from a
- * target server into this one (or another), identified purely by server ID.
+ * /clone all - Interactive server & expression cloner (Owner only)
  *
- *   /clone all <source> [destination]
+ *   /clone all source:<source_server_id> [destination:<dest_server_id>] [type:<mode>]
  *
- * - source:      the server ID to COPY FROM (the bot must be in it)
- * - destination: the server ID to paste into (defaults to the current server)
- *
- * Emoji slot caps and sticker boosts apply (Discord limits); anything that
- * cannot fit is skipped and reported. Animated emojis are copied as GIFs.
+ * - source:      Source server ID to copy FROM (bot must be in it)
+ * - destination: Destination server ID to clone INTO (defaults to current server)
+ * - type:        Optional direct mode; leave blank for interactive panel:
+ *                  • Clone Server (Text Channels, Voice Channels, Server Settings, Roles & Permissions)
+ *                  • Emoji, Stickers, GIF
+ *                  • Clone Both
  */
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 const { reply } = require('../../utils/helpers');
-const { commandEmbed, errorEmbed, successEmbed } = require('../../utils/decorations');
+const { errorEmbed } = require('../../utils/decorations');
+const { isBotOwner } = require('../../utils/owners');
+const {
+  createCloneSession,
+  deleteCloneSession,
+  validatePermissionsForMode,
+  buildClonePanelPayload,
+  buildWipeConfirmPayload,
+  runCloneExecution,
+} = require('../../utils/clonePanel');
 
-function cleanName(name, max) {
-  const cleaned = (name || 'emoji').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, max);
-  return cleaned || 'sticker';
+async function resolveGuild(client, id) {
+  if (!id) return null;
+  const trimmed = String(id).trim();
+  return client.guilds.cache.get(trimmed) || (await client.guilds.fetch(trimmed).catch(() => null));
 }
 
 module.exports = {
@@ -27,27 +37,69 @@ module.exports = {
   ownerOnly: true,
   data: new SlashCommandBuilder()
     .setName('clone')
-    .setDescription('Copy emojis + stickers from one server to another by ID (Owner only)')
+    .setDescription('Clone server channels, settings, roles & perms or emojis/stickers/GIFs by server ID (Owner only)')
     .addSubcommand((s) =>
       s
         .setName('all')
-        .setDescription('Copy all emojis/stickers/GIFs from a source server')
-        .addStringOption((o) => o.setName('source').setDescription('Source server ID to copy FROM').setRequired(true))
-        .addStringOption((o) => o.setName('destination').setDescription('Destination server ID (defaults to this server)')))
+        .setDescription('Clone server (channels, settings, roles/perms) or emojis, stickers & GIFs from a server')
+        .addStringOption((o) =>
+          o
+            .setName('source')
+            .setDescription('Source server ID to clone FROM')
+            .setRequired(true)
+            .setAutocomplete(true),
+        )
+        .addStringOption((o) =>
+          o
+            .setName('destination')
+            .setDescription('Destination server ID to clone INTO (defaults to current server)')
+            .setRequired(false)
+            .setAutocomplete(true),
+        )
+        .addStringOption((o) =>
+          o
+            .setName('type')
+            .setDescription('What to clone (leave empty to choose interactively in panel)')
+            .setRequired(false)
+            .addChoices(
+              { name: 'Clone Server (Text/Voice Channels, Settings, Roles & Perms)', value: 'server' },
+              { name: 'Emoji, Stickers, GIF', value: 'expressions' },
+              { name: 'Clone Both (Server + Emoji, Stickers & GIF)', value: 'both' },
+            ),
+        ),
+    )
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
+
+  async autocomplete(interaction) {
+    if (!isBotOwner(interaction.user.id)) {
+      return interaction.respond([]).catch(() => {});
+    }
+    const query = String(interaction.options.getFocused() || '').toLowerCase().trim();
+    const guilds = [...interaction.client.guilds.cache.values()];
+    const matched = guilds
+      .filter((g) => !query || g.name.toLowerCase().includes(query) || g.id.includes(query))
+      .slice(0, 25)
+      .map((g) => ({
+        name: `${g.name.slice(0, 68)} (${g.id})`,
+        value: g.id,
+      }));
+    return interaction.respond(matched).catch(() => {});
+  },
+
   async execute(interaction) {
-    const { isBotOwner } = require('../../utils/owners');
     if (!isBotOwner(interaction.user.id)) {
       return reply(interaction, {
         embeds: [errorEmbed({ description: 'This command is strictly reserved for the **Bot Owner**.' })],
         ephemeral: true,
       });
     }
-    const sourceId = interaction.options.getString('source');
-    const destId = interaction.options.getString('destination');
+
+    const sourceId = interaction.options.getString('source', true).trim();
+    const destId = interaction.options.getString('destination')?.trim() || null;
+    const directType = interaction.options.getString('type') || null;
     const client = interaction.client;
 
-    const sourceGuild = client.guilds.cache.get(sourceId);
+    const sourceGuild = await resolveGuild(client, sourceId);
     if (!sourceGuild) {
       return reply(interaction, {
         embeds: [errorEmbed({ description: `I am not in the source server \`${sourceId}\` — add me there first.` })],
@@ -55,93 +107,81 @@ module.exports = {
       });
     }
 
-    const destination = destId ? client.guilds.cache.get(destId) : interaction.guild;
+    const destination = destId ? await resolveGuild(client, destId) : interaction.guild;
     if (!destination) {
       return reply(interaction, {
-        embeds: [errorEmbed({ description: `I am not in the destination server \`${destId}\`.` })],
+        embeds: [
+          errorEmbed({
+            description: destId
+              ? `I am not in the destination server \`${destId}\`.`
+              : 'No server context found — please specify a **destination** server ID.',
+          }),
+        ],
         ephemeral: true,
       });
     }
 
-    if (!destination.members.me?.permissions.has(PermissionsBitField.Flags.ManageExpressions)) {
+    if (sourceGuild.id === destination.id) {
       return reply(interaction, {
-        embeds: [errorEmbed({ description: `I need **Manage Expressions** permission in **${destination.name}** to create emojis/stickers there.` })],
+        embeds: [
+          errorEmbed({
+            description: `Source and destination servers cannot be the same server (\`${sourceGuild.id}\`).`,
+          }),
+        ],
         ephemeral: true,
       });
     }
 
     await interaction.deferReply();
 
-    const emojis = await sourceGuild.emojis.fetch().catch(() => new Map());
-    const stickers = await sourceGuild.stickers.fetch().catch(() => new Map());
+    // Refresh caches so preview counts & bot permissions are exact
+    await Promise.allSettled([
+      sourceGuild.channels?.fetch?.(),
+      sourceGuild.roles?.fetch?.(),
+      sourceGuild.emojis?.fetch?.(),
+      sourceGuild.stickers?.fetch?.(),
+      destination.members?.fetchMe?.(),
+    ]);
 
-    let copiedEmojis = 0;
-    let copiedStickers = 0;
-    const skipped = [];
-
-    // ── Emojis (static + animated GIFs) ──────────────────────────────
-    // Per-type slots grow with boost tier: 50/100/150/200 (x2 for total).
-    const perType = 50 * (destination.premiumTier + 1);
-    for (const emoji of emojis.values()) {
-      const currentStatic = destination.emojis.cache.filter((e) => !e.animated).size;
-      const currentAnimated = destination.emojis.cache.filter((e) => e.animated).size;
-      if ((emoji.animated ? currentAnimated : currentStatic) >= perType) {
-        skipped.push(`:${emoji.name}: (emoji slots full)`);
-        continue;
-      }
-      try {
-        const url = emoji.imageURL({ size: 128, extension: emoji.animated ? 'gif' : 'png' });
-        await destination.emojis.create({
-          attachment: url,
-          name: cleanName(emoji.name, 32),
-          reason: `Peace✘ /clone all from ${sourceGuild.name}`,
-        });
-        copiedEmojis += 1;
-      } catch (err) {
-        skipped.push(`:${emoji.name}: (${err.message})`);
-      }
-    }
-
-    // ── Stickers ─────────────────────────────────────────────────────
-    if (stickers.size) {
-      if (destination.premiumTier === 0) {
-        skipped.push(`${stickers.size} sticker(s) (server has no boost slots)`);
-      } else {
-        let currentStickers = destination.stickers.cache.size;
-        const cap = destination.stickerLimit || 24;
-        for (const sticker of stickers.values()) {
-          if (currentStickers >= cap) {
-            skipped.push(`${sticker.name} (sticker slots full)`);
-            continue;
-          }
-          try {
-            const created = await destination.stickers.create({
-              name: cleanName(sticker.name, 30),
-              description: sticker.description || 'Copied via Peace✘ /clone all',
-              tags: (sticker.tags || 'peacex').replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 30),
-              file: sticker.url,
-              reason: `Peace✘ /clone all from ${sourceGuild.name}`,
-            });
-            if (created) currentStickers += 1;
-            copiedStickers += 1;
-          } catch (err) {
-            skipped.push(`${sticker.name} (${err.message})`);
-          }
-        }
-      }
-    }
-
-    const embed = successEmbed({
-      title: 'Clone Complete',
-      description:
-        `Copied from **${sourceGuild.name}** (\`${sourceGuild.id}\`) into **${destination.name}**.\n\n` +
-        `Emojis copied: **${copiedEmojis}/${emojis.size}** · Stickers copied: **${copiedStickers}/${stickers.size}**`,
-      fields: skipped.length
-        ? [{ name: 'Skipped', value: skipped.slice(0, 15).map((s) => `• ${s}`).join('\n') + (skipped.length > 15 ? `\n…and ${skipped.length - 15} more` : '') }]
-        : [],
-      extra: `Run from ${interaction.guild?.name || 'DM'}`,
+    const session = createCloneSession({
+      userId: interaction.user.id,
+      sourceGuild,
+      destinationGuild: destination,
     });
 
-    await interaction.editReply({ embeds: [embed] });
+    if (directType) {
+      const permCheck = validatePermissionsForMode(destination, directType, session.options);
+      if (!permCheck.ok) {
+        deleteCloneSession(session.id);
+        return interaction.editReply({
+          embeds: [
+            errorEmbed({
+              title: 'Missing Bot Permissions',
+              user: interaction.user,
+              description:
+                `I need the following permission(s) in **${destination.name}**:\n` +
+                permCheck.missing.map((m) => `• ${m}`).join('\n'),
+            }),
+          ],
+        });
+      }
+
+      if (directType === 'expressions') {
+        return runCloneExecution(interaction, session, sourceGuild, destination, 'expressions');
+      }
+
+      // Ask wipe/keep confirmation for destructive server / full clones
+      const confirmPayload = buildWipeConfirmPayload(
+        session,
+        sourceGuild,
+        destination,
+        directType,
+        interaction.user,
+      );
+      return interaction.editReply(confirmPayload);
+    }
+
+    const panelPayload = buildClonePanelPayload(session, sourceGuild, destination, interaction.user);
+    return interaction.editReply(panelPayload);
   },
 };

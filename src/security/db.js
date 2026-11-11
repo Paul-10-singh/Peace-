@@ -198,6 +198,23 @@ const MIGRATIONS = [
     PRIMARY KEY (user_id, guild_id)
   );
   `,
+  // v9 — blocked scam images (SHA-256 + 64-bit dHash perceptual fingerprints)
+  `
+  CREATE TABLE IF NOT EXISTS blocked_images (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id   TEXT    NOT NULL,
+    sha256     TEXT    NOT NULL,
+    dhash      TEXT    NOT NULL,
+    low_var    INTEGER NOT NULL DEFAULT 0,
+    label      TEXT,
+    source_url TEXT,
+    added_by   TEXT,
+    hits       INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    UNIQUE(guild_id, sha256)
+  );
+  CREATE INDEX IF NOT EXISTS idx_blocked_images_guild ON blocked_images(guild_id);
+  `,
 ];
 
 /**

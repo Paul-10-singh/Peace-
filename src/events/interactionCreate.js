@@ -261,6 +261,11 @@ module.exports = {
         await handleLogPanelInteraction(interaction);
         return;
       }
+      if (interaction.customId.startsWith('clone:')) {
+        const { handleClonePanelInteraction } = require('../utils/clonePanel');
+        await handleClonePanelInteraction(interaction);
+        return;
+      }
       if (interaction.customId === 'ticket_close') {
         const { closeTicketFlow } = require('../commands/moderation/ticketpanel.js');
         await closeTicketFlow(interaction, client);

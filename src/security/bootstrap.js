@@ -33,6 +33,7 @@ const runner = require('./playbooks/runner');
 const verdictCache = require('./ai/cache');
 const classifier = require('./ai/classifier');
 const feeds = require('./intel/feeds');
+const imageGuard = require('./intel/imageGuard');
 const intelRep = require('./intel/reputation');
 const domainRisk = require('./intel/domainRisk');
 const nexus = require('./nexus/gossip');
@@ -66,6 +67,7 @@ function bootstrap(client) {
   runner.init(db);
   verdictCache.init(db);
   feeds.init(db);
+  imageGuard.init(db);
   intelRep.init(db);
   nexusRep.init(db);
   nexus.init(db);
@@ -82,7 +84,7 @@ function bootstrap(client) {
     engine,
     behavior: { baseline, anomalies },
     ai: { classifier, cache: verdictCache },
-    intel: { feeds, reputation: intelRep, bloom: require('./intel/bloom'), domainRisk },
+    intel: { feeds, reputation: intelRep, bloom: require('./intel/bloom'), domainRisk, imageGuard },
     ratelimit: { redis: ratelimit, fingerprint },
     ledger: { chain, merkle, sink },
     playbooks: runner,
@@ -159,6 +161,7 @@ function disableAll() {
     () => anomalies.disable(),
     () => classifier.disable(),
     () => feeds.disable(),
+    () => imageGuard.disable(),
     () => domainRisk.disable(),
     () => ratelimit.disable(),
     () => fingerprint.disable(),
@@ -173,6 +176,7 @@ function enableAll() {
   const sec = activeClient?.security;
   if (!sec) return;
   sec.enabled = true;
+  imageGuard.enable();
   sec.engine.enable();
   scheduler.enable();
 }

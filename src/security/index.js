@@ -16,6 +16,7 @@ const runner = require('./playbooks/runner');
 const classifier = require('./ai/classifier');
 const verdictCache = require('./ai/cache');
 const feeds = require('./intel/feeds');
+const imageGuard = require('./intel/imageGuard');
 const bloom = require('./intel/bloom');
 const intelRep = require('./intel/reputation');
 const domainRisk = require('./intel/domainRisk');
@@ -42,6 +43,7 @@ module.exports = {
   classifier,
   verdictCache,
   feeds,
+  imageGuard,
   bloom,
   intelRep,
   domainRisk,

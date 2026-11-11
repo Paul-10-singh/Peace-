@@ -14,8 +14,9 @@
  *   sec:open:<key>               - render a specific protection panel
  *   sec:nav                      - /security dashboard cross-navigation
  *   sec:set:antiNuke:<field>     - select menu (punishment / lockdown)
- *   sec:pick:<key>:<kind>        - select menu that mutates (remove domain/word/role)
- *   sec:modal:<key>:<kind>       - opens a config modal (domain/word/settings/...)
+ *   sec:pick:<key>:<kind>        - select menu that mutates (remove domain/word/role/image)
+ *   sec:upload:<key>:<kind>      - collects a file/image message from the admin
+ *   sec:modal:<key>:<kind>       - opens a config modal (domain/word/settings/image/...)
  *   sec:add:<key>:<kind>         - modal submit handler
  *   sec:list:<key>               - ephemeral full listing
  */
@@ -31,9 +32,12 @@ const {
   TextInputStyle,
 } = require('discord.js');
 const { get, set, getList, addToList, removeFromList } = require('./settings');
-const { infoEmbed, successEmbed } = require('./decorations');
+const { infoEmbed, successEmbed, errorEmbed } = require('./decorations');
 const { chunkFieldValue } = require('./helpers');
 const { hasAccess } = require('./permissions');
+const imageGuard = require('../security/intel/imageGuard');
+
+const activeUploadCollectors = new Map(); // `${guildId}:${userId}` -> MessageCollector
 
 // Ordered navigation list (used by the /security dashboard selector).
 const ORDER = [
@@ -67,11 +71,20 @@ function btn(customId, label, style = ButtonStyle.Secondary) {
 }
 
 function opts(list, limit = 25) {
-  return list.slice(0, limit).map((v) =>
-    new StringSelectMenuOptionBuilder()
+  return list.slice(0, limit).map((v) => {
+    if (v && typeof v === 'object') {
+      const builder = new StringSelectMenuOptionBuilder()
+        .setLabel(String(v.label).length > 80 ? `${String(v.label).slice(0, 77)}...` : String(v.label))
+        .setValue(String(v.value));
+      if (v.description) {
+        builder.setDescription(String(v.description).slice(0, 100));
+      }
+      return builder;
+    }
+    return new StringSelectMenuOptionBuilder()
       .setLabel(String(v).length > 80 ? `${String(v).slice(0, 77)}...` : String(v))
-      .setValue(String(v))
-  );
+      .setValue(String(v));
+  });
 }
 
 function selectRow(customId, options, placeholder) {
@@ -88,7 +101,7 @@ function pickRow(customId, list, placeholder) {
 }
 
 // Status embed per protection — clean, bold key values, no emojis
-function statusEmbed(key, cfg) {
+function statusEmbed(key, cfg, guildId = null) {
   switch (key) {
     case 'security':
       return infoEmbed({
@@ -183,14 +196,19 @@ function statusEmbed(key, cfg) {
       });
     }
 
-    case 'scamDetect':
+    case 'scamDetect': {
+      const blockedImgs = guildId ? imageGuard.list(guildId) : [];
+      const totalHits = blockedImgs.reduce((sum, img) => sum + (img.hits || 0), 0);
       return infoEmbed({
         title: 'Scam Detect Configuration',
         description:
-          `**Status:** ${fmt(cfg.antiLink?.blockScam !== false)} automatic scam-link blocking\n` +
+          `**Status:** ${fmt(cfg.antiLink?.blockScam !== false)} automatic scam-link & scam-image blocking\n` +
+          `**Master Security:** ${fmt(cfg.enabled)}${!cfg.enabled ? ' *(turn ON in `/security` to enforce)*' : ''}\n` +
+          `**Blocked Images:** \`${blockedImgs.length}\` *(SHA-256 + dHash visual match · ${totalHits} hits)*\n` +
           `**Banner:** ${cfg.scamImage ? '`set`' : '*(none — add an image below)*'}`,
         image: cfg.scamImage || null,
       });
+    }
 
     default:
       return infoEmbed({ title: 'Security' });
@@ -316,15 +334,28 @@ function actionRows(key, cfg, guild) {
         navRow(),
       ];
 
-    case 'scamDetect':
+    case 'scamDetect': {
+      const blockedImgs = guild?.id ? imageGuard.list(guild.id) : [];
+      const imgPickOpts = blockedImgs.map((img) => ({
+        label: img.label || `Image #${img.id}`,
+        value: String(img.id),
+        description: `${img.low_var ? 'Exact SHA-256' : `dHash ${(img.dhash || '').slice(0, 8)}`} · ${img.hits || 0} hits`,
+      }));
       return [
         switchRow('sec:toggle:scamDetect:on', 'sec:toggle:scamDetect:off', 'Scam Detect ON', 'Scam Detect OFF'),
+        new ActionRowBuilder().addComponents(
+          btn('sec:upload:scamDetect:image', 'Block Image (Upload)', ButtonStyle.Secondary),
+          btn('sec:modal:scamDetect:image',  'Block Image (URL)',    ButtonStyle.Secondary),
+          btn('sec:list:scamDetect',         'List Images',          ButtonStyle.Secondary)
+        ),
         new ActionRowBuilder().addComponents(
           btn('sec:modal:scamDetect:banner', 'Set Banner Image', ButtonStyle.Secondary),
           btn('sec:del:scamDetect:banner',   'Remove Banner',    ButtonStyle.Danger)
         ),
+        pickRow('sec:pick:scamDetect:image', imgPickOpts, 'Remove a blocked image...'),
         navRow(),
-      ];
+      ].filter(Boolean);
+    }
 
     default:
       return [navRow()];
@@ -334,7 +365,7 @@ function actionRows(key, cfg, guild) {
 function panelPayload(interaction, key) {
   const cfg = get(interaction.guild.id, 'security');
   return {
-    embeds: [statusEmbed(key, cfg)],
+    embeds: [statusEmbed(key, cfg, interaction.guild.id)],
     components: actionRows(key, cfg, interaction.guild),
   };
 }
@@ -376,6 +407,28 @@ async function handleComponent(interaction) {
   }
 
   if (kind === 'list') {
+    if (use === 'scamDetect') {
+      const imgs = imageGuard.list(interaction.guild.id);
+      const lines = imgs.slice(0, 25).map((img) => {
+        const tag = img.label ? `**${img.label}**` : `Image #${img.id}`;
+        const note = img.low_var ? ' · exact-only' : '';
+        return `**#${img.id}** · ${tag} — \`${img.sha256.slice(0, 10)}\` · dHash \`${img.dhash.slice(0, 8)}\` · **${img.hits || 0}** hits${note}`;
+      });
+      await interaction
+        .reply({
+          embeds: [
+            infoEmbed({
+              title: `Blocked Scam Images (${imgs.length})`,
+              description: imgs.length
+                ? lines.join('\n') + (imgs.length > 25 ? `\n*...and ${imgs.length - 25} more*` : '')
+                : '*(no blocked images yet — click **Block Image (Upload)** or use `/scamdetect image:...`)*',
+            }),
+          ],
+          flags: MessageFlags.Ephemeral,
+        })
+        .catch(() => {});
+      return true;
+    }
     const cfg = get(interaction.guild.id, 'security');
     const items = use === 'antiWords' ? (cfg.words || []) : (cfg.antiLink?.allow || []);
     const title = use === 'antiWords' ? 'Blocked Words' : 'Allow-Listed Domains';
@@ -385,6 +438,123 @@ async function handleComponent(interaction) {
         flags: MessageFlags.Ephemeral,
       })
       .catch(() => {});
+    return true;
+  }
+
+  if (kind === 'upload' && use === 'scamDetect') {
+    if (typeof interaction.channel?.createMessageCollector !== 'function') {
+      await interaction
+        .reply({
+          embeds: [errorEmbed({ description: 'Cannot collect uploads in this channel. Use **Block Image (URL)** or `/scamdetect image:...` instead.' })],
+          flags: MessageFlags.Ephemeral,
+        })
+        .catch(() => {});
+      return true;
+    }
+
+    const guildId = interaction.guild.id;
+    const userId = interaction.user.id;
+    const uploadKey = `${guildId}:${userId}`;
+    const prev = activeUploadCollectors.get(uploadKey);
+    if (prev) prev.stop('superseded');
+
+    imageGuard.markPendingUpload(guildId, userId);
+
+    await interaction
+      .reply({
+        embeds: [
+          infoEmbed({
+            title: 'Upload Scam Image to Block',
+            description:
+              'Send the **image** (file attachment) or **image URL** in this channel within **60 seconds**.\n' +
+              '*(Optional: type a label along with the image. Your uploaded message will be deleted automatically after scanning.)*',
+          }),
+        ],
+        flags: MessageFlags.Ephemeral,
+      })
+      .catch(() => {});
+
+    const collector = interaction.channel.createMessageCollector({
+      filter: (m) => m.author?.id === userId,
+      max: 1,
+      time: 60_000,
+    });
+    activeUploadCollectors.set(uploadKey, collector);
+
+    collector.on('collect', async (msg) => {
+      imageGuard.ignoreMessage(msg.id);
+      try {
+        const urls = imageGuard.extractMessageImageUrls(msg);
+        if (!urls.length) {
+          await interaction
+            .editReply({
+              embeds: [errorEmbed({ description: 'No valid image attachment or direct image URL found in your message. Click **Block Image (Upload)** to try again.' })],
+            })
+            .catch(() => {});
+          return;
+        }
+
+        await msg.delete().catch(() => {});
+
+        const rawLabel = (msg.content || '').replace(/https?:\/\/[^\s<>()]+/gi, '').trim();
+        const firstAtt = typeof msg.attachments?.first === 'function' ? msg.attachments.first() : null;
+        const label = rawLabel || firstAtt?.name || null;
+
+        const { entry, alreadyExists } = await imageGuard.blockFromUrl(guildId, urls[0], {
+          label,
+          addedBy: userId,
+        });
+
+        const cfg = get(guildId, 'security');
+        const notes = [];
+        if (entry.low_var) {
+          notes.push('Low-detail/solid image detected — exact **SHA-256** matching only (visual dHash skipped to avoid false positives).');
+        }
+        if (!cfg.enabled) {
+          notes.push('Master Security is currently **OFF** — enable it in `/security` so messages are scanned.');
+        } else if (cfg.antiLink?.blockScam === false) {
+          notes.push('Scam Detect is currently **OFF** — enable it below so messages are scanned.');
+        }
+
+        await interaction
+          .editReply({
+            embeds: [
+              successEmbed({
+                title: alreadyExists ? 'Image Already Blocked' : 'Scam Image Blocked',
+                description:
+                  `**ID:** \`#${entry.id}\`${entry.label ? ` · **Label:** ${entry.label}` : ''}\n` +
+                  `**SHA-256:** \`${entry.sha256.slice(0, 16)}...\`\n` +
+                  `**dHash (64-bit):** \`${entry.dhash}\`` +
+                  (notes.length ? `\n\n> ${notes.join('\n> ')}` : ''),
+              }),
+            ],
+          })
+          .catch(() => {});
+
+        await interaction.followUp({ ...panelPayload(interaction, use), flags: MessageFlags.Ephemeral }).catch(() => {});
+      } catch (err) {
+        await interaction
+          .editReply({
+            embeds: [errorEmbed({ description: `Failed to process image: ${err.message}` })],
+          })
+          .catch(() => {});
+      }
+    });
+
+    collector.on('end', (_collected, reason) => {
+      if (activeUploadCollectors.get(uploadKey) === collector) {
+        activeUploadCollectors.delete(uploadKey);
+        imageGuard.clearPendingUpload(guildId, userId);
+      }
+      if (reason === 'time') {
+        interaction
+          .editReply({
+            embeds: [errorEmbed({ description: 'Timed out after 60 seconds — click **Block Image (Upload)** to try again.' })],
+          })
+          .catch(() => {});
+      }
+    });
+
     return true;
   }
 
@@ -442,15 +612,17 @@ async function handleComponent(interaction) {
 
   if (kind === 'modal') {
     const modal = new ModalBuilder().setCustomId(`sec:add:${use}:${parts[3]}`);
-    const input = (customId, label, value, max = 4000, placeholder) =>
-      new TextInputBuilder()
+    const input = (customId, label, value, max = 4000, placeholder = '', required = true) => {
+      const builder = new TextInputBuilder()
         .setCustomId(customId)
         .setLabel(label)
         .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setValue(value)
+        .setRequired(required)
         .setMaxLength(max)
         .setPlaceholder(placeholder || '');
+      if (value !== undefined && value !== null && value !== '') builder.setValue(String(value));
+      return builder;
+    };
     const cfg = get(interaction.guild.id, 'security');
     const pair = `${use}-${parts[3]}`;
 
@@ -474,6 +646,17 @@ async function handleComponent(interaction) {
         .addComponents(
           new ActionRowBuilder().addComponents(input('sec_value_action', 'Punishment (warn / timeout / kick)', String(cfg.action || 'warn'), 10)),
           new ActionRowBuilder().addComponents(input('sec_value_threshold', 'Warnings before auto-timeout (1-10)', String(cfg.warnThreshold ?? 3), 2))
+        );
+    } else if (pair === 'scamDetect-image') {
+      modal
+        .setTitle('Block Scam Image (URL)')
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            input('sec_value_imageurl', 'Direct image URL', '', 500, 'https://cdn.discordapp.com/.../scam.png')
+          ),
+          new ActionRowBuilder().addComponents(
+            input('sec_value_imagelabel', 'Label / reason (optional)', '', 80, 'Fake Nitro Giveaway', false)
+          )
         );
     } else if (pair === 'scamDetect-banner') {
       modal
@@ -505,6 +688,50 @@ async function handleComponent(interaction) {
   if (kind === 'add') {
     const pair = `${use}-${parts[3]}`;
     const cfg = get(interaction.guild.id, 'security');
+
+    if (pair === 'scamDetect-image') {
+      const imageUrl = interaction.fields.getTextInputValue('sec_value_imageurl').trim();
+      const label = (interaction.fields.getTextInputValue('sec_value_imagelabel') || '').trim() || null;
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+      try {
+        const { entry, alreadyExists } = await imageGuard.blockFromUrl(interaction.guild.id, imageUrl, {
+          label,
+          addedBy: interaction.user.id,
+        });
+        const notes = [];
+        if (entry.low_var) {
+          notes.push('Low-detail/solid image detected — exact **SHA-256** matching only (visual dHash skipped to avoid false positives).');
+        }
+        if (!cfg.enabled) {
+          notes.push('Master Security is currently **OFF** — enable it in `/security` so messages are scanned.');
+        } else if (cfg.antiLink?.blockScam === false) {
+          notes.push('Scam Detect is currently **OFF** — enable it below so messages are scanned.');
+        }
+        await interaction
+          .editReply({
+            embeds: [
+              successEmbed({
+                title: alreadyExists ? 'Image Already Blocked' : 'Scam Image Blocked',
+                description:
+                  `**ID:** \`#${entry.id}\`${entry.label ? ` · **Label:** ${entry.label}` : ''}\n` +
+                  `**SHA-256:** \`${entry.sha256.slice(0, 16)}...\`\n` +
+                  `**dHash (64-bit):** \`${entry.dhash}\`` +
+                  (notes.length ? `\n\n> ${notes.join('\n> ')}` : ''),
+              }),
+            ],
+          })
+          .catch(() => {});
+        await interaction.followUp({ ...panelPayload(interaction, use), flags: MessageFlags.Ephemeral }).catch(() => {});
+      } catch (err) {
+        await interaction
+          .editReply({
+            embeds: [errorEmbed({ description: `Could not block image: ${err.message}` })],
+          })
+          .catch(() => {});
+      }
+      return true;
+    }
+
     if (pair === 'antiSpam-settings') {
       const max = Math.max(2, Math.min(20, parseInt(interaction.fields.getTextInputValue('sec_value_spammax'), 10) || 5));
       const interval = Math.max(1, Math.min(30, parseInt(interaction.fields.getTextInputValue('sec_value_spaminterval'), 10) || 5));
@@ -568,6 +795,8 @@ async function handleComponent(interaction) {
         c.antiLink = c.antiLink || { enabled: false, allow: [], blockScam: true };
         c.antiLink.allow = (c.antiLink.allow || []).filter((d) => d !== domain);
       });
+    } else if (use === 'scamDetect' && what === 'image') {
+      imageGuard.remove(interaction.guild.id, item);
     }
     await interaction.update(panelPayload(interaction, use)).catch(() => {});
     return true;
