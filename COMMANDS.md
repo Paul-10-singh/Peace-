@@ -37,7 +37,7 @@ All commands are slash (`/`) commands.
 `24/7 voice`    : /247 on/end/status [channel] /vc247 set/off/status — bot stays in a VC around the clock & auto-rejoins on kick/move/disconnect
 `Tickets`       : /ticket setup/setlog/panel/close
 `Roles/emoji`   : /giverole /roleicon /stealemoji /rolemanage info/all/strip/inrole
-`Server config` : /log setup/view/set/autolink /welcome setup/test/enable/disable/info /exit setup/test/enable/disable/info /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /stats setup/disable/status /vcrole /setlog /embed /announce /backup /leaveserver /serverlist
+`Server config` : /log setup/view/set/autolink /welcome setup/dm/test/enable/disable/info /exit setup/test/enable/disable/info /autorole add/remove /addrole all mem /invite log set/remove /setup_tempvc set/remove /nickname /stats setup/disable/status /vcrole /setlog /embed /announce /backup /leaveserver /serverlist
 `Extras`        : /snipe /purgebots /picture user/server/icon
 `Security`      : /safety on/off/status /security on/off/action/threshold /whitelist add/remove /antilink * /antinuke on/off /scamdetect on/off /lockdown /ignore add/remove
 
@@ -55,7 +55,7 @@ Context menu (Owner): right-click a message → `Translate Message` (Google tran
 /extraowner add user:<user>	Grant owner powers in this server (main owner only)
 /extraowner remove user:<user>	Revoke owner powers in this server (main owner only)
 /extraowner temp user:<user> minutes:<n>	Grant temporary owner powers in this server (main owner only)
-/setprofile [username] [avatar]	Change bot's username/avatar
+/setprofile [username] [avatar] [avatar_file] [banner] [banner_file]	Change bot's username/avatar/banner (with Discord size/dim validation)
 /dm user:<user> message:<text>	DM a server member
 /autorole add role:<role>	Auto-assign a role to every new member (removes with /autorole remove)
 /addrole all mem role:<role>	Add a role to EVERY member of the server
@@ -63,7 +63,10 @@ Context menu (Owner): right-click a message → `Translate Message` (Google tran
 /invite log remove	Disable invite logging
 /setup_tempvc set creation_channel:<vc>	Members joining that VC get a private temp VC below it plus an owner-only control-panel chat (both auto-deleted when empty)
 /setup_tempvc remove	Disable temporary VCs
-/mention user:<user> count:<1-10>	Ping a user repeatedly (owner only)
+/welcome setup channel:<ch> [rules] [chat] [apply] [role]	Configure server welcome channel & quick link mentions
+/welcome dm action:<edit|set|test|view|reset|enable|disable> [message]	Customize, preview & toggle server Welcome DM (modal popup editor supported)
+/welcome test [channel]	Preview the welcome message
+/welcome enable / disable / info	Toggle welcome messages and view config
 
 ## 👑 Owner — Moderation
 
@@ -161,7 +164,7 @@ One open ticket per user per category. @everyone denied; creator + staff role al
 /note add/edit/list/remove	Personal notes (max 15)
 /afk [reason]	Set AFK status
 /stats setup/disable/status	Live member/bot counters
-/setlog category:<category> channel:<channel>	Route event logs
+/setlog category:<category> channel:<channel>	Route event logs (vc/voice, message, moderation, welcome, goodbye, role, nickname, invite, utility, security)
 /stealemoji emoji:<emoji> [name]	Add emoji to server
 /support	Support info/link
 /stop	Leave voice. While 24/7 mode is on → refuses with a warning (only /247 mode:end frees it)

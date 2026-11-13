@@ -278,6 +278,11 @@ module.exports = {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'welcome_dm_modal') {
+        const { handleWelcomeDmModal } = require('../utils/welcome');
+        await handleWelcomeDmModal(interaction);
+        return;
+      }
       if (interaction.customId.startsWith('sec:add:')) {
         const { handleComponent } = require('../utils/securityPanel');
         await handleComponent(interaction);

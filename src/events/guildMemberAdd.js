@@ -15,7 +15,7 @@ module.exports = {
   async execute(client, member) {
     const { successEmbed, errorEmbed } = require('../utils/decorations');
     const guild = member.guild;
-    const config = get(guild.id, 'welcome');
+    const config = get(guild.id, 'welcome') || {};
 
     // ── resolve the invite that was used (needed by anti-raid ctx) ────────
     const oldInvites = getCachedInvites(guild.id);
@@ -77,28 +77,15 @@ module.exports = {
       }
     }
 
-    // --- Automatic Welcome DM ---
+    // --- Automatic Dynamic Welcome DM ---
+    const welcomeUtil = require('../utils/welcome');
     if (!member.user.bot) {
-      const dmWelcomeMessage = `_ _
-⠀⠀   𓈒  <a:nature:1552099429362962452> 𓂃  /[** TNC Official__   __**](https://discord.gg/far7wH9fmP)   ﹑   \` 🤍 \`⠀⠀⠀
--# _ _⠀     ⠀𐔌  ᗢ⠀⠀ch__ill__ & v*c*⠀𖦹⠀**social**⠀﹒﹢   ꒱꒱
--# _ _    ⠀ ⠀     ⠀ꕀ⠀⠀__anime__⠀join__**2**__create **!**
--# _ _ ✦﹒﹢⠀⠀de__v__⠀⸝⸝⠀**events**⠀⸝⸝ ⠀<a:gaming:1552099352158150706> g*aming*⠀<a:music:1550504904521678848>
--# _ _ [** rules__   __**](https://discord.com/channels/1340379968571576341/1341663035017793647)  [** chat__   __**](https://discord.com/channels/1340379968571576341/1501972344179261611)  [** support__   __**](https://discord.com/channels/1340379968571576341/1551092438460801064)
--# _ _ 
--#          <a:LIKEBUTTON:1550504896745181234> Welcome to TNC™
--#         \`hope you enjoy your stay !\`
--# _ _                    𝝑ৎ`;
-
-      const { EmbedBuilder } = require('discord.js');
-      const dmEmbed = new EmbedBuilder()
-        .setColor(0xFFFFFF)
-        .setDescription(dmWelcomeMessage);
-
-      await member.send({ embeds: [dmEmbed] }).catch(() => {});
+      const dmPayload = welcomeUtil.buildWelcomeDMPayload({ guild, member, config });
+      if (dmPayload) {
+        await member.send(dmPayload).catch(() => {});
+      }
     }
 
-    const welcomeUtil = require('../utils/welcome');
     if (config.enabled !== false) {
       const welcomeChannel = welcomeUtil.resolveWelcomeChannel(guild, config);
       if (welcomeChannel) {

@@ -2,13 +2,12 @@
  * Peace✘ - Discord Bot
  * Developed by Smith.Code
  *
- * Temporary voice channels: when a member joins the configured "creation"
- * channel (/setup_tempvc), create a private temp VC named after them, move
- * them in, and delete the temp VC once it becomes empty. Guarded so bots,
- * channel deletions and permission failures never crash the listener.
+ * Temporary voice channels & VC audit logger.
+ * Captures VC Join, Left, Switched/Moved, Disconnected, Server Muted/Unmuted, Server Deafened/Undeafened.
+ * Spawns private temp VC upon joining the setup channel and automatically deletes when empty.
  */
 const { get } = require('../utils/settings');
-const { PermissionFlagsBits, ChannelType } = require('discord.js');
+const { PermissionFlagsBits, ChannelType, AuditLogEvent } = require('discord.js');
 const { saveRoom, removeRoom, panelPayload } = require('../utils/tempvcPanel');
 
 const cleaning = new Set();
@@ -25,23 +24,99 @@ async function logVoiceEvent(client, oldState, newState) {
   let action = null;
   let channel = newState.channel || oldState.channel;
   let oldChannel = oldState.channel;
+  let executor = null;
 
+  const canAudit = Boolean(guild.members?.me?.permissions?.has(PermissionFlagsBits.ViewAuditLog));
+
+  // 1. Joined Voice Channel
   if (!oldState.channelId && newState.channelId) {
     action = 'Joined Voice Channel';
     channel = newState.channel;
-  } else if (oldState.channelId && !newState.channelId) {
+  }
+  // 2. Left / Disconnected from Voice Channel
+  else if (oldState.channelId && !newState.channelId) {
     action = 'Left Voice Channel';
     channel = oldState.channel;
-  } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+
+    if (canAudit) {
+      try {
+        const audit = await guild.fetchAuditLogs({
+          type: AuditLogEvent.MemberDisconnect,
+          limit: 1,
+        });
+        const entry = audit?.entries?.first();
+        if (entry && Date.now() - entry.createdTimestamp < 4000) {
+          action = 'Voice Disconnected';
+          executor = entry.executor;
+        }
+      } catch {}
+    }
+  }
+  // 3. Switched / Moved Voice Channel
+  else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
     action = 'Switched Voice Channel';
     channel = newState.channel;
     oldChannel = oldState.channel;
-  } else if (oldState.serverMute !== newState.serverMute) {
+
+    if (canAudit) {
+      try {
+        const audit = await guild.fetchAuditLogs({
+          type: AuditLogEvent.MemberMove,
+          limit: 1,
+        });
+        const entry = audit?.entries?.first();
+        if (entry && Date.now() - entry.createdTimestamp < 4000) {
+          action = 'Moved Voice Channel';
+          executor = entry.executor;
+        }
+      } catch {}
+    }
+  }
+  // 4. Server Mute / Unmute
+  else if (oldState.serverMute !== newState.serverMute) {
     action = newState.serverMute ? 'Server Muted' : 'Server Unmuted';
     channel = newState.channel;
-  } else if (oldState.serverDeaf !== newState.serverDeaf) {
+
+    if (canAudit) {
+      try {
+        const audit = await guild.fetchAuditLogs({
+          type: AuditLogEvent.MemberUpdate,
+          limit: 1,
+        });
+        const entry = audit?.entries?.first();
+        if (
+          entry &&
+          entry.target?.id === member.id &&
+          Date.now() - entry.createdTimestamp < 4000 &&
+          entry.changes?.some((c) => c.key === 'mute')
+        ) {
+          executor = entry.executor;
+        }
+      } catch {}
+    }
+  }
+  // 5. Server Deafen / Undeafen
+  else if (oldState.serverDeaf !== newState.serverDeaf) {
     action = newState.serverDeaf ? 'Server Deafened' : 'Server Undeafened';
     channel = newState.channel;
+
+    if (canAudit) {
+      try {
+        const audit = await guild.fetchAuditLogs({
+          type: AuditLogEvent.MemberUpdate,
+          limit: 1,
+        });
+        const entry = audit?.entries?.first();
+        if (
+          entry &&
+          entry.target?.id === member.id &&
+          Date.now() - entry.createdTimestamp < 4000 &&
+          entry.changes?.some((c) => c.key === 'deaf')
+        ) {
+          executor = entry.executor;
+        }
+      } catch {}
+    }
   }
 
   if (action) {
@@ -50,6 +125,7 @@ async function logVoiceEvent(client, oldState, newState) {
       action,
       channel,
       oldChannel,
+      executor,
     });
 
     await sendLog(client, guild.id, 'vc', { embeds: [embed] }).catch(() => {});
@@ -66,7 +142,7 @@ async function handleVoiceState(client, oldState, newState) {
   if (!channelId) return;
 
   const member = newState.member;
-  if (member?.user.bot) return;
+  if (member?.user?.bot) return;
 
   // 1. Member joined the creation channel -> spawn a temp VC for them.
   if (newState.channelId === channelId && oldState.channelId !== channelId) {
@@ -111,7 +187,7 @@ async function handleVoiceState(client, oldState, newState) {
       await created.send(panelPayload(created, member.id)).catch(() => {});
       await member.voice.setChannel(created).catch(() => null);
     } catch (err) {
-      console.error(`[PeaceX] [TempVC] Could not spawn temp channel for ${member.user.tag}:`, err.message);
+      console.error(`[PeaceX] [TempVC] Could not spawn temp channel for ${member.user?.tag || member.user?.username}:`, err.message);
     }
     return;
   }
@@ -120,20 +196,20 @@ async function handleVoiceState(client, oldState, newState) {
   //    channel are fine; deletion is guarded against the bot itself).
   if (oldState.channelId && newState.channelId !== oldState.channelId) {
     const oldChannel = guild.channels.cache.get(oldState.channelId);
-    if (oldChannel && oldChannel.members.size === 0) {
+    if (oldChannel && oldChannel.members?.size === 0) {
       const room = get(guild.id, 'tempvc').rooms?.[oldChannel.id];
       if (room) {
         if (cleaning.has(oldChannel.id)) return;
         cleaning.add(oldChannel.id);
-      try {
-        if (oldChannel.members.size === 0) {
-          const room = get(guild.id, 'tempvc').rooms?.[oldChannel.id];
-          if (room?.chatId && room.chatId !== oldChannel.id) {
-            await guild.channels.cache.get(room.chatId)?.delete('Temp VC panel cleanup').catch(() => null);
+        try {
+          if (oldChannel.members?.size === 0) {
+            const currentRoom = get(guild.id, 'tempvc').rooms?.[oldChannel.id];
+            if (currentRoom?.chatId && currentRoom.chatId !== oldChannel.id) {
+              await guild.channels.cache.get(currentRoom.chatId)?.delete('Temp VC panel cleanup').catch(() => null);
+            }
+            removeRoom(guild.id, oldChannel.id);
+            await oldChannel.delete('Temp VC idle').catch(() => null);
           }
-          removeRoom(guild.id, oldChannel.id);
-          await oldChannel.delete('Temp VC idle').catch(() => null);
-        }
         } finally {
           cleaning.delete(oldChannel.id);
         }

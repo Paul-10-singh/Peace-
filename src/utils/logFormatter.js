@@ -270,7 +270,7 @@ function buildRoleUpdateLog({ member, added = [], removed = [], executor = null 
   });
 }
 
-function buildVoiceLog({ member, action, channel, oldChannel = null, details = null }) {
+function buildVoiceLog({ member, action, channel, oldChannel = null, executor = null, details = null }) {
   const user = member?.user || member;
   const avatarUrl =
     typeof user?.displayAvatarURL === 'function'
@@ -292,27 +292,55 @@ function buildVoiceLog({ member, action, channel, oldChannel = null, details = n
     emoji = '📤';
     color = 0xED4245; // Red
     actionText = `${emoji} ${userMention} left voice channel ${channelMention}.`;
-  } else if (action === 'Switched Voice Channel') {
+  } else if (action === 'Voice Disconnected' || action === 'Disconnected from Voice Channel') {
+    emoji = '🔌';
+    color = 0xED4245; // Red
+    if (executor && executor.id !== user.id) {
+      actionText = `🔌 ${userMention} was disconnected from ${channelMention} by <@${executor.id}>.`;
+    } else {
+      actionText = `🔌 ${userMention} disconnected from voice channel ${channelMention}.`;
+    }
+  } else if (action === 'Switched Voice Channel' || action === 'Moved Voice Channel') {
     emoji = '🔀';
     color = 0x5865F2; // Blurple
     const oldMention = oldChannel ? `<#${oldChannel.id}>` : '`Unknown VC`';
-    actionText = `${emoji} ${userMention} switched from ${oldMention} to ${channelMention}.`;
+    if (executor && executor.id !== user.id) {
+      actionText = `${emoji} ${userMention} was moved from ${oldMention} to ${channelMention} by <@${executor.id}>.`;
+    } else {
+      actionText = `${emoji} ${userMention} moved from ${oldMention} to ${channelMention}.`;
+    }
   } else if (action === 'Server Muted') {
     emoji = '🔇';
-    color = 0xFEE75C;
-    actionText = `${emoji} ${userMention} was server muted in ${channelMention}.`;
+    color = 0xFEE75C; // Yellow
+    if (executor && executor.id !== user.id) {
+      actionText = `${emoji} ${userMention} was server muted in ${channelMention} by <@${executor.id}>.`;
+    } else {
+      actionText = `${emoji} ${userMention} was server muted in ${channelMention}.`;
+    }
   } else if (action === 'Server Unmuted') {
     emoji = '🔊';
-    color = 0x57F287;
-    actionText = `${emoji} ${userMention} was server unmuted in ${channelMention}.`;
+    color = 0x57F287; // Green
+    if (executor && executor.id !== user.id) {
+      actionText = `${emoji} ${userMention} was server unmuted in ${channelMention} by <@${executor.id}>.`;
+    } else {
+      actionText = `${emoji} ${userMention} was server unmuted in ${channelMention}.`;
+    }
   } else if (action === 'Server Deafened') {
     emoji = '🛑';
-    color = 0xED4245;
-    actionText = `${emoji} ${userMention} was server deafened in ${channelMention}.`;
+    color = 0xED4245; // Red
+    if (executor && executor.id !== user.id) {
+      actionText = `${emoji} ${userMention} was server deafened in ${channelMention} by <@${executor.id}>.`;
+    } else {
+      actionText = `${emoji} ${userMention} was server deafened in ${channelMention}.`;
+    }
   } else if (action === 'Server Undeafened') {
     emoji = '🎧';
-    color = 0x57F287;
-    actionText = `${emoji} ${userMention} was server undeafened in ${channelMention}.`;
+    color = 0x57F287; // Green
+    if (executor && executor.id !== user.id) {
+      actionText = `${emoji} ${userMention} was server undeafened in ${channelMention} by <@${executor.id}>.`;
+    } else {
+      actionText = `${emoji} ${userMention} was server undeafened in ${channelMention}.`;
+    }
   } else {
     actionText = `${emoji} ${userMention}: \`${action}\` in ${channelMention}.`;
   }
@@ -323,6 +351,9 @@ function buildVoiceLog({ member, action, channel, oldChannel = null, details = n
   }
   if (oldChannel && oldChannel.id !== channel?.id) {
     idsBlock += `\n> 🔊 <#${oldChannel.id}> ( \`${oldChannel.id}\` )`;
+  }
+  if (executor && executor.id !== user.id) {
+    idsBlock += `\n> 🛡️ <@${executor.id}> ( \`${executor.id}\` )`;
   }
 
   const description = `${actionText}\n\n${idsBlock}`;

@@ -31,6 +31,7 @@ async function getLogChannel(client, guildId, category) {
     else if (category === 'goodbye') channelId = config.exit || config.goodbye;
     else if (category === 'utility') channelId = config.server || config.channel || config.utility;
     else if (category === 'invite') channelId = config.invite || config.entry;
+    else if (category === 'vc' || category === 'voice') channelId = config.vc || config.voice;
   }
 
   // Auto-detect fallback from text channel names if unconfigured
