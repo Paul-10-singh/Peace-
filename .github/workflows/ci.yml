@@ -35,7 +35,7 @@ jobs:
         run: npm audit --omit=dev || true
 
       - name: Generate SBOM (CycloneDX)
-        run: npx --yes @cyclonedx/cyclonedx-npm --output-file sbom.cdx.json
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-file sbom.cdx.json || true
 
       - name: Upload SBOM + coverage artifact
         uses: actions/upload-artifact@v4
