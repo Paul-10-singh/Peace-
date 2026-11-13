@@ -90,8 +90,9 @@ describe('Log Panel System', () => {
   });
 
   it('autoDetectChannels matches channels by normalized name pattern', () => {
+    const guildId = `mock_detect_guild_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const mockGuild = {
-      id: 'mock_detect_guild',
+      id: guildId,
       channels: {
         cache: new Map([
           ['ch1', { id: 'ch1', name: '🔒〢ᴍᴇꜱꜱᴀɢᴇ_ʟᴏɢꜱ', type: 0, isTextBased: () => true }],
@@ -109,8 +110,9 @@ describe('Log Panel System', () => {
   });
 
   it('strictly ignores voice channels when detecting log channels', () => {
+    const guildId = `mock_vc_guild_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const mockGuild = {
-      id: 'mock_vc_guild',
+      id: guildId,
       channels: {
         cache: new Map([
           ['vc1', { id: 'vc1', name: 'General Vc', type: 2, isTextBased: () => true, isVoiceBased: () => true }],

@@ -81,11 +81,27 @@ describe('ledger chain', () => {
     const rows = chain.query({ guildId: 'G', limit: 2 });
     expect(rows[0].action === 'kick' || rows[0].seq === 3).toBe(true); // DESC order
   });
+
+  it('verifies sub-chains starting from fromSeq > 1', () => {
+    chain.append('G', 'U1', 'ban', 'X', {}, 1000);
+    chain.append('G', 'U2', 'kick', 'Y', {}, 2000);
+    chain.append('G', 'U3', 'warn', 'Z', {}, 3000);
+    const res = chain.verify('G', { fromSeq: 2 });
+    expect(res.ok).toBe(true);
+  });
 });
 
 describe('ledger merkle anchoring', () => {
   it('dayKey produces an integer YYYYMMDD', () => {
     expect(merkle.dayKey(new Date('2026-09-21T12:00:00Z').getTime())).toBe(20260921);
+  });
+
+  it('handles edge cases in merkleRoot and verification lookups', () => {
+    expect(merkle.merkleRoot(['single_leaf'])).toMatch(/^[0-9a-f]{64}$/);
+    expect(merkle.merkleRoot(['a', 'b', 'c', 'd'])).toMatch(/^[0-9a-f]{64}$/);
+    expect(merkle.verifyDay(99991231)).toEqual({ ok: false, reason: 'no-root' });
+    expect(merkle.verifySignature(99991231)).toBe(false);
+    expect(merkle.loadOrCreateKey()).toHaveProperty('publicHex');
   });
 
   it('produces deterministic roots and idempotent daily roots', () => {
