@@ -377,6 +377,68 @@ function buildVoiceLog({ member, action, channel, oldChannel = null, executor = 
   return embed;
 }
 
+function buildTimeoutLog({ member, executor = null, reason = null, until = null, type = 'applied' }) {
+  const user = member?.user || member;
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const fields = [
+    { label: 'Target User', value: `<@${user.id}> (\`${user.username}\`)` },
+    { label: 'User ID', value: `\`${user.id}\`` },
+  ];
+
+  if (type === 'applied') {
+    const untilUnix = until ? Math.floor(new Date(until).getTime() / 1000) : null;
+    fields.push({
+      label: 'Moderator',
+      value: executor ? `<@${executor.id}> (\`${executor.username}\`)` : '`Unknown / Audit`',
+    });
+    if (untilUnix) {
+      fields.push({
+        label: 'Timeout Until',
+        value: `<t:${untilUnix}:F> (<t:${untilUnix}:R>)`,
+      });
+    }
+    fields.push({ label: 'Reason', value: `\`${reason || 'No reason provided'}\`` });
+    fields.push({ label: 'Timed Out At', value: `<t:${nowUnix}:F> (<t:${nowUnix}:R>)` });
+
+    return createLogCard({
+      title: '⏳ Member Timed Out',
+      user,
+      fields,
+      color: 0xED4245,
+    });
+  }
+
+  if (type === 'removed') {
+    fields.push({
+      label: 'Moderator',
+      value: executor ? `<@${executor.id}> (\`${executor.username}\`)` : '`Unknown / Audit`',
+    });
+    if (reason) {
+      fields.push({ label: 'Reason', value: `\`${reason}\`` });
+    }
+    fields.push({ label: 'Action', value: '`Timeout removed before expiration`' });
+    fields.push({ label: 'Removed At', value: `<t:${nowUnix}:F> (<t:${nowUnix}:R>)` });
+
+    return createLogCard({
+      title: '🔓 Member Timeout Removed',
+      user,
+      fields,
+      color: 0x57F287,
+    });
+  }
+
+  // type === 'expired'
+  fields.push({ label: 'Status', value: '`Timeout completed naturally (Auto-Expired)`' });
+  fields.push({ label: 'Expired At', value: `<t:${nowUnix}:F> (<t:${nowUnix}:R>)` });
+
+  return createLogCard({
+    title: '⏰ Member Timeout Expired',
+    user,
+    fields,
+    color: 0x5865F2,
+  });
+}
+
 module.exports = {
   createLogCard,
   buildMessageDeleteLog,
@@ -384,6 +446,7 @@ module.exports = {
   buildMemberJoinLog,
   buildMemberLeaveLog,
   buildBanLog,
+  buildTimeoutLog,
   buildNicknameLog,
   buildRoleUpdateLog,
   buildVoiceLog,
