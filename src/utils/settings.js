@@ -81,6 +81,7 @@ const DEFAULTS = {
   quarantine: { roleId: null, bypass: [], users: {} },
   reactionroles: [],
   verification: { roleId: null, removeRoleId: null },
+  emojipilot: { enabled: true, targets: {} },
 };
 
 function persist() {

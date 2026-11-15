@@ -5,6 +5,7 @@
 const { EmbedBuilder } = require('discord.js');
 const { getAfk, isAfk, clearAfk } = require('../utils/afk');
 const { tryRunMessageCommand } = require('../utils/messageCmd');
+const { handleEmojiPilotMessage } = require('../utils/emojipilot');
 
 const protectedSayMessages = new Map(); // channelId -> lower-case message text counts
 
@@ -57,6 +58,9 @@ module.exports = {
       }).catch(() => {});
       return;
     }
+
+    // --- EmojiPilot auto-reactions (mentions & replies) ---
+    await handleEmojiPilotMessage(message).catch(() => {});
 
     // --- AFK system (works even when the security module is off) ---
 

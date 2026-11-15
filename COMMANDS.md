@@ -165,6 +165,7 @@ One open ticket per user per category. @everyone denied; creator + staff role al
 /afk [reason]	Set AFK status
 /stats setup/disable/status	Live member/bot counters
 /setlog category:<category> channel:<channel>	Route event logs (vc/voice, message, moderation, welcome, goodbye, role, nickname, invite, utility, security)
+/emojipilot set/remove/list/clear	Auto-react with emoji when targeted users are mentioned or replied to (server-isolated)
 /stealemoji emoji:<emoji> [name]	Add emoji to server
 /support	Support info/link
 /stop	Leave voice. While 24/7 mode is on → refuses with a warning (only /247 mode:end frees it)
