@@ -11,7 +11,39 @@
  */
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 const { DisTube, Song } = require('distube');
+
+// Patch global.URL so DisTubeStream's internal URL parser cleanly handles local file paths
+// with spaces, Unicode characters, and Windows drive letters on both Linux and Windows.
+const NativeURL = global.URL;
+if (!global.__distubeUrlPatched) {
+  class DisTubeCompatibleURL extends NativeURL {
+    constructor(input, base) {
+      if (typeof input === 'string' && !/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(input)) {
+        try {
+          super(pathToFileURL(input).href, base);
+          return;
+        } catch {}
+      }
+      super(input, base);
+    }
+
+    get pathname() {
+      const raw = super.pathname;
+      if (this.protocol === 'file:') {
+        let decoded = decodeURIComponent(raw);
+        if (process.platform === 'win32') {
+          decoded = decoded.replace(/^\/([a-zA-Z]:)/, '$1');
+        }
+        return decoded;
+      }
+      return raw;
+    }
+  }
+  global.URL = DisTubeCompatibleURL;
+  global.__distubeUrlPatched = true;
+}
 const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
 const { DirectLinkPlugin } = require('@distube/direct-link');
@@ -558,17 +590,19 @@ async function playFunTrack(interaction, client, trackNumber) {
       destroyConnection(interaction.guild);
     }
 
+    const fileUrl = pathToFileURL(filePath).href;
+
     const song = new Song(
       {
         source: 'local_file',
-        id: filePath,
+        id: fileUrl,
         name: trackName,
-        url: filePath,
+        url: fileUrl,
       },
       { member: interaction.member, metadata: { funMode: true, trackName } }
     );
     song.stream.playFromSource = true;
-    song.stream.url = filePath;
+    song.stream.url = fileUrl;
 
     const replyMsg = await interaction.editReply({
       embeds: [buildFunModeEmbed(trackName)],
