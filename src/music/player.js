@@ -71,6 +71,7 @@ if (ffmpeg) {
 
 let distubeInstance = null;
 const emptyTimers = new Map();
+const funModeGuilds = new Map();
 
 function getDisTube() {
   return distubeInstance;
@@ -207,15 +208,34 @@ function initMusic(client) {
   // DisTube Events
   distubeInstance.on('playSong', async (queue, song) => {
     try {
-      if (queue._funMode || song.metadata?.funMode) {
+      const isFun =
+        queue._funMode ||
+        song.metadata?.funMode ||
+        song.isFunMode ||
+        funModeGuilds.has(queue.id) ||
+        (typeof song.url === 'string' && (song.url.endsWith('Av1.mp3') || song.url.endsWith('Av2.mp3')));
+
+      if (isFun) {
+        queue._funMode = true;
+        const funData = funModeGuilds.get(queue.id);
+        if (funData?.message && !queue._nowPlayingMessage) {
+          queue._nowPlayingMessage = funData.message;
+        }
+        // Fun Mode card is already active via slash command reply — never send standard music embed
         if (queue._nowPlayingMessage) return;
-        const trackName = song.metadata?.trackName || queue._funTrackName || song.name || 'Av1';
+
+        const trackName = song.metadata?.trackName || funData?.trackName || queue._funTrackName || song.name || 'Av1';
         const embed = buildFunModeEmbed(trackName);
         const components = buildFunModeButtons(queue.paused);
         const msg = await queue.textChannel?.send({ embeds: [embed], components });
         queue._nowPlayingMessage = msg;
         return;
       }
+
+      // Normal music playback - ensure funMode state is cleared
+      funModeGuilds.delete(queue.id);
+      queue._funMode = false;
+
       if (queue._nowPlayingMessage) {
         const prevMsg = queue._nowPlayingMessage;
         queue._nowPlayingMessage = null;
@@ -259,6 +279,7 @@ function initMusic(client) {
   });
 
   distubeInstance.on('deleteQueue', (queue) => {
+    funModeGuilds.delete(queue.id);
     if (queue._nowPlayingMessage) {
       const prevMsg = queue._nowPlayingMessage;
       queue._nowPlayingMessage = null;
@@ -366,6 +387,7 @@ async function handleMusicButton(interaction, client) {
     }
 
     if (action === 'music_fun_stop') {
+      funModeGuilds.delete(interaction.guildId);
       queue._funMode = false;
       queue.stop();
       // Do NOT disconnect! Bot stays in VC until user runs /disconnect or all members leave
@@ -614,9 +636,13 @@ async function playFunTrack(interaction, client, trackNumber) {
       existingQueue.stop();
     }
 
+    // Register fun mode state on guild BEFORE dispatching playback so playSong never sends standard Now Playing card
+    funModeGuilds.set(interaction.guildId, { trackName, message: replyMsg });
+
     await client.distube?.play(voiceChannel, song, {
       textChannel: interaction.channel,
       member: interaction.member,
+      metadata: { funMode: true, trackName },
     });
 
     const queue = client.distube?.getQueue(interaction.guildId);
