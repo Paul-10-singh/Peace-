@@ -11,11 +11,15 @@
  * Commands not listed anywhere default to OWNER (tier 3).
  * Commands in BOT_OWNER_COMMANDS are strictly reserved for the Global Bot Owner.
  */
+const { PermissionFlagsBits } = require('discord.js');
 const { isOwner, isBotOwner, BOT_OWNER_COMMANDS } = require('./owners');
 const { isTrusted } = require('./whitelist');
 const { get, getList } = require('./settings');
 
 const TIERS = { EVERYONE: 1, ADMIN: 2, OWNER: 3, TRUSTED: 4 };
+
+// Fun Mode commands (/p1, /p2)
+const FUN_COMMANDS = new Set(['p1', 'p2']);
 
 // ------------- role-gated "everyone" commands -----------------------------
 // Still shown as EVERYONE tier (no Discord permission required) but only
@@ -75,6 +79,29 @@ function getCommandTier(command, sub = null) {
 
 // user = { id } | interaction.member | message.member, guild = Guild | null
 // DMs have no whitelist/roles. `user` needs .id; role-gated checks need .roles.
+function hasFunAccess(user, guild) {
+  if (!user) return false;
+  const uid = String(user.id || user.user?.id || '');
+  if (!uid) return false;
+  // 1. Global Bot Owner
+  if (isBotOwner(uid)) return true;
+  // 2. Server Owner (guild owner or extra owner)
+  if (isOwner(uid, guild?.id, guild)) return true;
+  // 3. Whitelisted / Trusted member
+  if (guild && isTrusted(uid, guild.id)) return true;
+  if (guild && getList(guild.id, 'security', 'whitelist').includes(uid)) return true;
+  // 4. Server Admins (Administrator or ManageGuild)
+  if (
+    user.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+    user.permissions?.has?.(PermissionFlagsBits.ManageGuild) ||
+    user.member?.permissions?.has?.(PermissionFlagsBits.Administrator) ||
+    user.member?.permissions?.has?.(PermissionFlagsBits.ManageGuild)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function hasAccess(user, guild, command, sub = null) {
   // If the command or subcommand is strictly for the Global Bot Owner
   if (BOT_OWNER_COMMANDS.has(command) || (sub && BOT_OWNER_COMMANDS.has(sub))) {
@@ -83,6 +110,10 @@ function hasAccess(user, guild, command, sub = null) {
 
   // Global Bot Owner (everywhere) or Server Owner (in this guild)
   if (isOwner(user.id, guild?.id, guild)) return true;
+
+  if (FUN_COMMANDS.has(command)) {
+    return hasFunAccess(user, guild);
+  }
 
   const tier = getCommandTier(command, sub);
   if (tier === TIERS.EVERYONE) {
@@ -114,4 +145,4 @@ function canRunAny(user, guild, command) {
   return subs.some((sub) => hasAccess(user, guild, command.data.name, sub));
 }
 
-module.exports = { TIERS, getCommandTier, hasAccess, canRunAny };
+module.exports = { TIERS, getCommandTier, hasAccess, canRunAny, hasFunAccess };

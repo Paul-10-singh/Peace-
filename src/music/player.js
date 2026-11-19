@@ -9,7 +9,9 @@
  * - DisTube v5 compatible (DisTubeOptions clean of legacy keys)
  * - Custom voiceStateUpdate auto-leave handler (respects 24/7 mode)
  */
-const { DisTube } = require('distube');
+const path = require('path');
+const fs = require('fs');
+const { DisTube, Song } = require('distube');
 const { SpotifyPlugin } = require('@distube/spotify');
 const { SoundCloudPlugin } = require('@distube/soundcloud');
 const { DirectLinkPlugin } = require('@distube/direct-link');
@@ -20,6 +22,7 @@ const {
   ButtonStyle,
   EmbedBuilder,
   MessageFlags,
+  PermissionFlagsBits,
   StringSelectMenuBuilder,
 } = require('discord.js');
 const ffmpeg = require('ffmpeg-static');
@@ -27,6 +30,7 @@ const { BRAND, footer, successEmbed, errorEmbed, warningEmbed } = require('../ut
 const { get: getSetting } = require('../utils/settings');
 const { destroyConnection } = require('../utils/voice247');
 const { E } = require('../utils/emojis');
+const { hasFunAccess } = require('../utils/permissions');
 
 // Set FFMPEG_PATH environment variable so DisTube always locates the bundled binary
 if (ffmpeg) {
@@ -121,6 +125,33 @@ function buildNowPlayingEmbed(queue, song) {
   return embed;
 }
 
+function buildFunModeEmbed(trackName = 'Av1') {
+  return new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setTitle('FUN MODE START')
+    .setDescription(
+      `**Track:** \`${trackName}.mp3\`\n` +
+      `**Filter:** Extreme Bass Boosted & Noise\n` +
+      `**Loop:** 🔁 Auto-Loop Enabled`
+    )
+    .setFooter({ text: 'Peace✘ · Fun Mode' })
+    .setTimestamp();
+}
+
+function buildFunModeButtons(isPaused = false) {
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('music_fun_pause_resume')
+      .setLabel(isPaused ? 'Resume' : 'Pause')
+      .setStyle(isPaused ? ButtonStyle.Success : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('music_fun_stop')
+      .setLabel('✖')
+      .setStyle(ButtonStyle.Danger)
+  );
+  return [row];
+}
+
 function initMusic(client) {
   if (distubeInstance) return distubeInstance;
 
@@ -128,6 +159,9 @@ function initMusic(client) {
     emitNewSongOnly: true,
     emitAddSongWhenCreatingQueue: false,
     emitAddListWhenCreatingQueue: false,
+    customFilters: {
+      extreme_bass: 'bass=g=30:f=90:w=0.6,equalizer=f=60:width_type=h:width=50:g=25,volume=2.2,alimiter=limit=0.98',
+    },
     plugins: [
       new SpotifyPlugin(),
       new YouTubePlugin(),
@@ -141,6 +175,15 @@ function initMusic(client) {
   // DisTube Events
   distubeInstance.on('playSong', async (queue, song) => {
     try {
+      if (queue._funMode || song.metadata?.funMode) {
+        if (queue._nowPlayingMessage) return;
+        const trackName = song.metadata?.trackName || queue._funTrackName || song.name || 'Av1';
+        const embed = buildFunModeEmbed(trackName);
+        const components = buildFunModeButtons(queue.paused);
+        const msg = await queue.textChannel?.send({ embeds: [embed], components });
+        queue._nowPlayingMessage = msg;
+        return;
+      }
       if (queue._nowPlayingMessage) {
         const prevMsg = queue._nowPlayingMessage;
         queue._nowPlayingMessage = null;
@@ -156,6 +199,7 @@ function initMusic(client) {
   });
 
   distubeInstance.on('finishSong', async (queue, song) => {
+    if (queue._funMode) return;
     if (queue._nowPlayingMessage) {
       const prevMsg = queue._nowPlayingMessage;
       queue._nowPlayingMessage = null;
@@ -168,6 +212,7 @@ function initMusic(client) {
   distubeInstance.on('addList', () => {});
 
   distubeInstance.on('finish', (queue) => {
+    if (queue._funMode) return;
     if (queue._nowPlayingMessage) {
       const prevMsg = queue._nowPlayingMessage;
       queue._nowPlayingMessage = null;
@@ -268,6 +313,40 @@ async function handleMusicButton(interaction, client) {
   }
 
   const action = interaction.customId;
+
+  if (action === 'music_fun_pause_resume' || action === 'music_fun_stop') {
+    if (!hasFunAccess(interaction.member || interaction.user, interaction.guild)) {
+      return interaction.reply({
+        content: '<a:wrong:1550504971303395430> You do not have permission to use Fun Mode controls. Only Admins, Owners, and Whitelisted members can access this.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (action === 'music_fun_pause_resume') {
+      if (queue.paused) {
+        queue.resume();
+        await interaction.update({ components: buildFunModeButtons(false) });
+      } else {
+        queue.pause();
+        await interaction.update({ components: buildFunModeButtons(true) });
+      }
+      return;
+    }
+
+    if (action === 'music_fun_stop') {
+      queue._funMode = false;
+      queue.stop();
+      // Do NOT disconnect! Bot stays in VC until user runs /disconnect or all members leave
+      const stoppedEmbed = new EmbedBuilder()
+        .setColor(0x2b2d31)
+        .setTitle('FUN MODE STOPPED')
+        .setDescription(`Stopped by <@${interaction.user.id}>.`)
+        .setFooter({ text: 'Peace✘ · Fun Mode' })
+        .setTimestamp();
+      await interaction.update({ embeds: [stoppedEmbed], components: [] });
+      return;
+    }
+  }
 
   try {
     switch (action) {
@@ -432,10 +511,105 @@ async function handleMusicButton(interaction, client) {
   }
 }
 
+async function playFunTrack(interaction, client, trackNumber) {
+  const member = interaction.member;
+  const voiceChannel = member?.voice?.channel;
+
+  if (!hasFunAccess(member || interaction.user, interaction.guild)) {
+    return interaction.reply({
+      content: '<a:wrong:1550504971303395430> You do not have permission to use Fun Mode commands. Only Admins, Owners, and Whitelisted members can access this.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  if (!voiceChannel) {
+    return interaction.reply({
+      embeds: [errorEmbed({ description: `You must be in a voice channel to use \`/p${trackNumber}\`!` })],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const permissions = voiceChannel.permissionsFor(interaction.guild?.members?.me || client.user);
+  if (!permissions?.has(PermissionFlagsBits.Connect) || !permissions?.has(PermissionFlagsBits.Speak)) {
+    return interaction.reply({
+      embeds: [errorEmbed({ description: 'I do not have permission to **Connect** or **Speak** in your voice channel!' })],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const trackName = trackNumber === '2' ? 'Av2' : 'Av1';
+  const filePath = path.join(__dirname, 'lib', `${trackName}.mp3`);
+  if (!fs.existsSync(filePath)) {
+    return interaction.reply({
+      embeds: [errorEmbed({ description: `Audio file \`${trackName}.mp3\` not found in \`src/music/lib\`.` })],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  await interaction.deferReply();
+
+  try {
+    const me = interaction.guild?.members?.me;
+    const currentBotChannelId = me?.voice?.channelId;
+    const distubeVoice = client.distube?.voices?.get(interaction.guildId);
+    const isVoiceReady = distubeVoice?.connection?.state?.status === 'ready';
+
+    if (!currentBotChannelId || !isVoiceReady || currentBotChannelId !== voiceChannel.id) {
+      destroyConnection(interaction.guild);
+    }
+
+    const song = new Song(
+      {
+        source: 'local_file',
+        id: filePath,
+        name: trackName,
+        url: filePath,
+      },
+      { member: interaction.member, metadata: { funMode: true, trackName } }
+    );
+    song.stream.playFromSource = true;
+    song.stream.url = filePath;
+
+    const replyMsg = await interaction.editReply({
+      embeds: [buildFunModeEmbed(trackName)],
+      components: buildFunModeButtons(false),
+    });
+
+    const existingQueue = client.distube?.getQueue(interaction.guildId);
+    if (existingQueue) {
+      existingQueue.stop();
+    }
+
+    await client.distube?.play(voiceChannel, song, {
+      textChannel: interaction.channel,
+      member: interaction.member,
+    });
+
+    const queue = client.distube?.getQueue(interaction.guildId);
+    if (queue) {
+      queue._funMode = true;
+      queue._funTrackName = trackName;
+      queue._nowPlayingMessage = replyMsg;
+      queue.setRepeatMode(1); // Auto-loop indefinitely
+      if (!queue.filters.has('extreme_bass')) {
+        queue.filters.add('extreme_bass');
+      }
+    }
+  } catch (err) {
+    console.error(`[PeaceX] [P${trackNumber} Error]:`, err);
+    return interaction.editReply({
+      embeds: [errorEmbed({ title: 'Playback Failed', description: `Could not play track: \`${(err?.message || String(err)).slice(0, 200)}\`` })],
+    });
+  }
+}
+
 module.exports = {
   initMusic,
   getDisTube,
   buildMusicButtons,
   buildNowPlayingEmbed,
+  buildFunModeEmbed,
+  buildFunModeButtons,
+  playFunTrack,
   handleMusicButton,
 };
